@@ -36,9 +36,8 @@ class Matcher:
         :param idx: An integer file index for the images to match.
         :return: None
         """
-        img_name = '{:06d}.png'.format(idx)
-        self._img1 = cv2.imread(DATA_PATH + f'image_0{SEP}' + img_name, 0)
-        self._img2 = cv2.imread(DATA_PATH + f'image_1{SEP}' + img_name, 0)
+        self._img1, self._img2 = utils.utils.read_images(idx)
+
 
     def detect(self, debug=False):
         """Detect key-points for the img1 and img2 images using the algorithm specified
