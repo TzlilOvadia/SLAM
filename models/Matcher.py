@@ -1,11 +1,10 @@
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-import os
 import random
+from utils.utils import read_images
 
-from utils import utils
-from utils.utils import MAC_OS_PATH, WINDOWS_OS_PATH, SEP, DATA_PATH
+# noinspection PyUnresolvedReferences
 
 
 class Matcher:
@@ -33,7 +32,16 @@ class Matcher:
         :param idx: An integer file index for the images to match.
         :return: None
         """
-        self._img1, self._img2 = utils.read_images(idx)
+        self._img1, self._img2 = read_images(6)
+
+    def get_matches(self)->np.ndarray:
+        return self._matches
+
+    def get_kp(self):
+        return self._img1_kp, self._img2_kp
+
+    def get_dsc(self):
+        return self._img1_dsc,self._img2_dsc
 
 
     def detect(self, debug=False):
@@ -113,23 +121,3 @@ class Matcher:
         plt.figure(figsize=(15, 15))
         plt.imshow(img3)
         plt.show()
-
-
-if __name__ == '__main__':
-    random.seed(6)
-    # part 1
-    # question 1.1
-    sift = cv2.SIFT_create()
-    sift_matcher = Matcher(sift, threshold=0.2)
-    sift_matcher.detect(debug=True)
-
-    # question 1.2
-    sift_matcher.compute(debug=True)
-
-    # question 1.3
-    sift_matcher.find_matching_features(with_significance_test=False)
-    sift_matcher.draw_matches(num_of_matches=20)
-
-    # question 1.4
-    sift_matcher.find_matching_features(with_significance_test=True, debug=True)
-    sift_matcher.draw_matches(num_of_matches=20, debug=True)
