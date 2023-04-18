@@ -58,3 +58,4 @@ if __name__ == '__main__':
     # Draw matches after using rectified stereo classification test:
     title = "Section 2.2: "
     draw_matches(img1, kp1, img2, kp2, img1in, img2in, img1out, img2out, title=title)
+

@@ -33,7 +33,9 @@ class Matcher:
         :param idx: An integer file index for the images to match.
         :return: None
         """
+
         self._img1, self._img2 = utils.read_images(idx)
+
 
 
     def detect(self, debug=False):
