@@ -28,3 +28,5 @@ def coords_from_kps(matches, kp1,kp2):
     x2, y2 = np.array([kp2[idx].pt for idx in train_idxs]).T
 
     return x1, y1, x2, y2, indices_mapping
+
+

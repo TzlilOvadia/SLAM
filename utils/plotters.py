@@ -41,3 +41,5 @@ def draw_layer(img2, x2_in, x2_out, y2_in, y2_out, s=1):
     plt.yticks([])
     plt.xticks([])
 
+
+
