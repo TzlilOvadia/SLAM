@@ -17,3 +17,14 @@ def read_images(idx) -> (np.ndarray, np.ndarray):
     _img1 = cv2.imread(DATA_PATH + f'image_0{SEP}' + img_name, 0)
     _img2 = cv2.imread(DATA_PATH + f'image_1{SEP}' + img_name, 0)
     return _img1, _img2
+
+
+def coords_from_kps(matches, kp1,kp2):
+    query_idxs = np.array([match[0].queryIdx for match in matches])
+    train_idxs = np.array([match[0].trainIdx for match in matches])
+    indices_mapping = np.stack((query_idxs,train_idxs))
+    x1, y1 = np.array([kp1[idx].pt for idx in query_idxs]).T
+    x2, y2 = np.array([kp2[idx].pt for idx in train_idxs]).T
+
+    return x1, y1, x2, y2, indices_mapping
+
