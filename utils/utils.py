@@ -7,6 +7,7 @@ WINDOWS_OS_PATH = "../dataset/sequences/05\\"
 SEP = "\\" if os.name == 'nt' else "/"
 DATA_PATH = WINDOWS_OS_PATH if os.name == 'nt' else MAC_OS_PATH
 
+
 def read_images(idx) -> (np.ndarray, np.ndarray):
     """
     Read two images (img1 and img2) given an index and assign them to the Matcher object.
@@ -27,4 +28,5 @@ def coords_from_kps(matches, kp1,kp2):
     x2, y2 = np.array([kp2[idx].pt for idx in train_idxs]).T
 
     return x1, y1, x2, y2, indices_mapping
+
 

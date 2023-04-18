@@ -24,7 +24,6 @@ def draw_matches(img1, kp1, img2, kp2, img1in, img2in, img1out, img2out, title="
 
     fig = plt.figure()
     fig.suptitle(title)
-    fig.add_subplot(2, 1, 1)
 
     fig.add_subplot(2, 1, 1)
     draw_layer(img1, x1_in, x1_out, y1_in, y1_out)
@@ -39,3 +38,8 @@ def draw_layer(img2, x2_in, x2_out, y2_in, y2_out, s=1):
     plt.imshow(img2, cmap='gray')
     plt.scatter(x2_in, y2_in, s=s, color='cyan')
     plt.scatter(x2_out, y2_out, s=s, color='orange')
+    plt.yticks([])
+    plt.xticks([])
+
+
+
