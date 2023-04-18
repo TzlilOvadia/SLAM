@@ -32,7 +32,7 @@ class Matcher:
         :param idx: An integer file index for the images to match.
         :return: None
         """
-        self._img1, self._img2 = read_images(6)
+        self._img1, self._img2 = read_images(idx)
 
     def get_matches(self)->np.ndarray:
         return self._matches
