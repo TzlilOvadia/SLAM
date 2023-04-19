@@ -1,5 +1,5 @@
 import numpy as np
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, cm, colors
 
 
 def gen_hist(data, bins, title="", x="X", y="Y"):
@@ -79,11 +79,25 @@ def draw_3d_points(points_list: list, title='', s=5):
     print(f"min z after triangulation : {zs.min()}, number of negative zs is {np.where(zs<0)[0].size} out of {len(zs)}")
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
-    ax.scatter(xs, ys, zs, c='blue', marker='o', s=s)
+    # color = np.array([1, 0, 0, 0.9])  # RGBA format for red color with alpha value
+    # colors = np.tile(color, (len(xs), 1))
+    s = s * zs // 5
+    s[s == 0] = 1
+    cmap = cm.ScalarMappable(norm=colors.Normalize(vmin=min(zs), vmax=max(zs)), cmap='coolwarm')
+
+    # Create a scatter plot using scatter method, and set the color based on the z-values
+
+    scatter = ax.scatter(xs, ys, zs, c=cmap.to_rgba(zs), alpha=0.2, marker='o', s=s)
     ax.set_xlabel('X', fontsize=15)
     ax.set_ylabel('Y', fontsize=15)
     ax.set_zlabel('Z', fontsize=15)
     ax.set_title(title)
+
+    # Create a legend that shows the colormap
+    cbar = fig.colorbar(cmap)
+    cbar.ax.set_ylabel('Z values')
+
+
     ax.set_xlim((-100, 100))
     ax.set_ylim((-100, 100))
     ax.set_zlim((-300, 1000))
