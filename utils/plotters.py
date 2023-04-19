@@ -39,15 +39,24 @@ def draw_inlier_and_outlier_matches(img1, kp1, img2, kp2, img1in, img2in, img1ou
     fig.suptitle(title)
 
     fig.add_subplot(2, 1, 1)
-    draw_layer(img1, x1_in, x1_out, y1_in, y1_out)
+    _draw_layer(img1, x1_in, x1_out, y1_in, y1_out)
 
     fig.add_subplot(2, 1, 2)
-    draw_layer(img2, x2_in, x2_out, y2_in, y2_out)
+    _draw_layer(img2, x2_in, x2_out, y2_in, y2_out)
 
     fig.show()
 
 
-def draw_layer(img, x2_in, x2_out, y2_in, y2_out, s=1):
+def _draw_layer(img, x2_in, x2_out, y2_in, y2_out, s=1):
+    """
+    :param img:
+    :param x2_in:
+    :param x2_out:
+    :param y2_in:
+    :param y2_out:
+    :param s:
+    :return:
+    """
     plt.imshow(img, cmap='gray')
     plt.scatter(x2_out, y2_out, s=s, color='cyan')
     plt.scatter(x2_in, y2_in, s=s, color='orange')
@@ -55,7 +64,14 @@ def draw_layer(img, x2_in, x2_out, y2_in, y2_out, s=1):
     plt.xticks([])
 
 
-def draw_3d_points(points_list, title='', s=5):
+def draw_3d_points(points_list: list, title='', s=5):
+    """
+    Creates a 3D point cloud from the provided points list
+    :param points_list: points in 3d space to plot
+    :param title: An informative title to describe the plot
+    :param s: The size of each point in the 3d plot
+    :return:
+    """
     points_in_3d_np = np.array(points_list)
     xs = points_in_3d_np[:, 0]
     ys = points_in_3d_np[:, 1]
