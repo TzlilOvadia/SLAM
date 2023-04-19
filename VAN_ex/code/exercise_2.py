@@ -100,6 +100,7 @@ def least_squares(p1, p2, Pmat, Qmat):
 
 
 if __name__ == '__main__':
+
     random.seed(6)
     img1, img2 = utils.read_images(0)
     h, w = img1.shape
@@ -127,14 +128,6 @@ if __name__ == '__main__':
     draw_inlier_and_outlier_matches(img1, kp1, img2, kp2, img1in, img2in, img1out, img2out, title=title)
     print(f"out of {len(matches)} matches, {len(img1out)} were discarded as outliers")
 
-    # Testing the rejection policy under the assumption that the Y-coordinate of erroneous matches is distributed
-    # uniformly across the image
-    # y2_sampled_uniformly = np.random.uniform(0.0, h, len(y2))
-    # uniform_deviations = calc_y_coord_deviations(y1, y2_sampled_uniformly)
-    # img1in_uniform, img2in_uniform, img1out_uniform, img2out_uniform = rectificatied_stereo_pattern(y1, y2_sampled_uniformly)
-    # draw_inlier_and_outlier_matches(img1, kp1, img2, kp2, img1in_uniform, img2in_uniform, img1out_uniform, img2out_uniform, title=title)
-
-
     #### Section 2.3 #####
     x1_in, y1_in = np.array([kp1[idx].pt for idx in img1in]).T
     x2_in, y2_in = np.array([kp2[idx].pt for idx in img2in]).T
@@ -158,7 +151,6 @@ if __name__ == '__main__':
     for idx in range(0,100,10):
         sift = cv2.SIFT_create()
         matcher = Matcher(sift, file_index=idx)
-        #matcher.read_images(idx)
         matcher.detect_and_compute()
         matcher.find_matching_features(with_significance_test=False)
         matches = matcher.get_matches()
