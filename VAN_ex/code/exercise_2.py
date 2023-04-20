@@ -6,7 +6,7 @@ from models.Matcher import Matcher
 from utils.plotters import gen_hist, draw_inlier_and_outlier_matches, draw_3d_points
 
 
-def calc_y_coord_deviations(y1, y2, thresh=1):
+def calc_y_coord_deviations(y1, y2):
     """
     Given y1 and y2, we calculate for each pair of matched points the deviation w.r.t their deviation.
     :param y1: The y-coordinate of all kp1.pt
@@ -15,8 +15,7 @@ def calc_y_coord_deviations(y1, y2, thresh=1):
     :return:
     """
     deviations = np.abs(y1 - y2)
-    mask = deviations >= thresh
-    return deviations[mask]
+    return deviations
 
 
 def find_median_dist(list1, list2):
