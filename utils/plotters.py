@@ -1,7 +1,11 @@
+import random
+
+import cv2
 import numpy as np
 from matplotlib import pyplot as plt, cm, colors
 
-
+HORIZONTAL_REPRESENTATION = 0
+VERTICAL_REPRESENTATION = 1
 def gen_hist(data, bins, title="", x="X", y="Y"):
     """
     :param data:
@@ -102,4 +106,32 @@ def draw_3d_points(points_list: list, title='', s=5):
     ax.set_ylim((-100, 100))
     ax.set_zlim((-300, 1000))
     ax.invert_yaxis()
+    plt.show()
+
+def draw_matches(matches, im1, im2, img1_kp, img2_kp, num_of_matches=5000, debug=False, display=VERTICAL_REPRESENTATION):
+    """
+    This function draws the matches found by the matching algorithm between the two input images.
+    :param display:
+    :param num_of_matches: Maximum number of matches to be randomly chosen and displayed
+    :return: None
+    """
+
+    current_num_of_matches = len(matches)
+    if current_num_of_matches >= num_of_matches:
+        matches = random.sample(matches, num_of_matches)
+    print(f"drawing {len(matches)} matches")
+
+    if debug:
+        im_1_pt = img1_kp[212]
+        im_2_pt = img2_kp[135]
+        im1 = cv2.circle(im1, (np.int(im_1_pt.pt[0]), np.int(im_1_pt.pt[1])), 10, 3, thickness=3, lineType=8,
+                         shift=0)
+        im2 = cv2.circle(im2, (np.int(im_2_pt.pt[0]), np.int(im_2_pt.pt[1])), 10, 3, thickness=3, lineType=8,
+                         shift=0)
+    img3 = cv2.drawMatchesKnn(im1, img1_kp, im2, img2_kp, matches, None,
+                              flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    if display is VERTICAL_REPRESENTATION:
+        img3=cv2.rotate(img3, cv2.ROTATE_90_CLOCKWISE)
+    plt.figure(figsize=(15, 15))
+    plt.imshow(img3)
     plt.show()
