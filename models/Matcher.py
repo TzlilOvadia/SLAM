@@ -13,6 +13,7 @@ FRAMES = 4
 
 HORIZONTAL_REPRESENTATION = 0
 VERTICAL_REPRESENTATION = 1
+
 class Matcher:
     """A class for matching features between two images using a specified algorithm and matcher."""
     def __init__(self, algo=cv2.SIFT_create(), matcher=cv2.BFMatcher(), file_index=0, threshold=.2, display=HORIZONTAL_REPRESENTATION):
@@ -24,7 +25,9 @@ class Matcher:
         :param threshold: A float in the range on [0,1], used in order to filter descriptors by their significance.
         """
         # Added a caching option which saves everything related to a particular file index (key)
-        self._cache = {}
+
+        self.cache = {}
+
         self.display = display
         self._file_index = file_index
         self.algo = algo
@@ -49,7 +52,7 @@ class Matcher:
             self._img2 = cv2.rotate(self._img2, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         # I Changed this function to keep each frame array into the cache for later use
-        self._cache[self._file_index] = {FRAMES: (self._img1, self._img2), LEFT: None, RIGHT: None}
+        self.cache[self._file_index] = {FRAMES: (self._img1, self._img2), LEFT: None, RIGHT: None}
 
     def get_matches(self) -> np.ndarray:
         return self._matches
@@ -90,10 +93,9 @@ class Matcher:
         self.read_images(file_index)
         self._img1_kp, self._img1_dsc = self.algo.detectAndCompute(self._img1, None)
         self._img2_kp, self._img2_dsc = self.algo.detectAndCompute(self._img2, None)
-        self._cache[self._file_index][LEFT] = (self._img1_kp, self._img1_dsc)
-        print(self._cache[self._file_index][LEFT])
-        self._cache[self._file_index][RIGHT] = (self._img2_kp, self._img2_dsc)
-        print(self._cache[self._file_index][RIGHT])
+        self.cache[self._file_index][LEFT] = (np.copy(self._img1_kp), np.copy(self._img1_dsc))
+        self.cache[self._file_index][RIGHT] = (np.copy(self._img2_kp), np.copy(self._img2_dsc))
+
 
 
     def find_matching_features(self, with_significance_test=True, debug=False):
@@ -106,7 +108,8 @@ class Matcher:
             self.apply_threshold(debug)
         else:
             self._matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=1)
-        self._cache[self._file_index][MATCHES] = self._matches
+        self.cache[self._file_index][MATCHES] = self._matches
+
 
     def apply_threshold(self, debug=False):
         """Filter matches based on a threshold value and return the filtered matches.
@@ -122,26 +125,6 @@ class Matcher:
         self._matches = filtered
 
 
-    def match_between_consecutive_frames(self, prev_frame_index, cur_frame_index, debug=True):
-        """
-        given to frames indices, this function will compute their matching points and cache it.
-        :param prev_frame_index:
-        :param cur_frame_index:
-        :return:
-        """
-        prev_kps, prev_dsc = self._cache[prev_frame_index][LEFT] # Returns kp, dsc of previous left image
-        cur_kps, cur_dsc = self._cache[cur_frame_index][LEFT] # Returns kp, dsc of current left image
-
-        prev_im1 = self._cache[prev_frame_index][FRAMES][0]
-        cur_im1 = self._cache[cur_frame_index][FRAMES][0]
-        matches = self.matcher.knnMatch(cur_dsc, prev_dsc, k=2)
-
-        self._cache[cur_frame_index][CONSECUTIVE] = matches
-        matches = Matcher.apply_thresholds(matches, .9)
-
-        draw_matches(matches, prev_im1, cur_im1, prev_kps, cur_kps, num_of_matches=20, debug=False, display=self.display)
-        return matches
-
 
     @staticmethod
     def apply_thresholds(matches, threshold):
@@ -150,3 +133,27 @@ class Matcher:
             if m.distance < threshold * n.distance:
                 filtered.append([m])
         return filtered
+
+    def match_between_consecutive_frames(self, prev_frame_index, cur_frame_index, debug=True):
+        """
+        given to frames indices, this function will compute their matching points and cache it.
+        :param prev_frame_index:
+        :param cur_frame_index:
+        :return:
+        """
+
+        prev_kps, prev_dsc = self.cache[prev_frame_index][LEFT] # Returns kp, dsc of previous left image
+        cur_kps, cur_dsc = self.cache[cur_frame_index][LEFT] # Returns kp, dsc of current left image
+
+        prev_im1 = self.cache[prev_frame_index][FRAMES][0]
+        cur_im1 = self.cache[cur_frame_index][FRAMES][0]
+        matches = self.matcher.knnMatch(prev_dsc, cur_dsc, k=2)
+        filtered = []
+        for i, (m, n) in enumerate(matches):
+            if m.distance < 0.1 * n.distance:
+                filtered.append([m])
+        self.cache[cur_frame_index][CONSECUTIVE] = filtered
+        filtered = Matcher.apply_thresholds(matches, .1)
+        draw_matches(filtered, prev_im1, cur_im1, prev_kps, cur_kps, num_of_matches=5000, debug=False, display=HORIZONTAL_REPRESENTATION)
+        return matches
+

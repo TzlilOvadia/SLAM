@@ -5,8 +5,9 @@ import numpy as np
 from VAN_ex.code.exercise_2 import least_squares
 from models.Matcher import Matcher
 from utils import utils
-from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches
-from utils.utils import rectificatied_stereo_pattern, coords_from_kps, array_to_dict
+from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches,draw_matches
+from utils.utils import rectificatied_stereo_pattern, coords_from_kps, array_to_dict, read_images
+
 
 cache = {}
 matcher = Matcher()
@@ -15,7 +16,6 @@ MATCHES = 1
 DSC = 2
 HORIZONTAL_REPRESENTATION = 0
 VERTICAL_REPRESENTATION = 1
-cur_file = 0
 
 def run_before(lastfunc, *args1, **kwargs1):
     """
@@ -80,9 +80,8 @@ def get_3d_points_cloud(matcher, file_index=0, debug=False):
     return inlier_points_in_3d
 
 
-def match_next_pair():
-    global cur_file
-    cur_file += 1
+
+def match_next_pair(cur_file):
     _ = get_3d_points_cloud(matcher, file_index=cur_file, debug=True)
     cur_kps1, cur_kps2 = matcher.get_kp()
     cur_matches = matcher.get_matches()
@@ -91,22 +90,22 @@ def match_next_pair():
 
 if __name__ == '__main__':
     random.seed(6)
+
     k, m1, m2 = utils.read_cameras()
     matcher = Matcher(display=HORIZONTAL_REPRESENTATION)
-
     # Section 3.1
     # Matching features, remove outliers and triangulate
-    prev_kps1, prev_kps2, prev_matches = match_next_pair()
+
+    prev_kps1, prev_kps2, prev_matches = match_next_pair(cur_file = 0)
     x1, y1, x2, y2, prev_indices_mapping = coords_from_kps(prev_matches, prev_kps1, prev_kps2)
 
     prev_indices_mapping = array_to_dict(prev_indices_mapping)
-    cur_kps1, cur_kps2, cur_matches = match_next_pair()
+    cur_kps1, cur_kps2, cur_matches = match_next_pair(cur_file = 1)
     x1t, y1t, x2t, y2t, cur_indices_mapping = coords_from_kps(cur_matches, cur_kps1, cur_kps2)
     cur_indices_mapping = array_to_dict(cur_indices_mapping)
-
     # Section 3.2
     # Match features between the two left images (left0 and left1)
-    consecutive_matches = matcher.match_between_consecutive_frames(cur_file-1, cur_file)
+    consecutive_matches = matcher.match_between_consecutive_frames(0, 1)
 
     # Section 3.3
     # Now we that we have:
@@ -124,5 +123,3 @@ if __name__ == '__main__':
             concensus_matces.append((prev,cur,idx))
         except KeyError:
             continue
-
-
