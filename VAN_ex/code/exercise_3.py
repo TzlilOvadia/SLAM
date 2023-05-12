@@ -8,6 +8,7 @@ from utils import utils
 from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches,draw_matches
 from utils.utils import rectificatied_stereo_pattern, coords_from_kps, array_to_dict, read_images
 
+
 cache = {}
 matcher = Matcher()
 KPS = 0
@@ -15,7 +16,6 @@ MATCHES = 1
 DSC = 2
 HORIZONTAL_REPRESENTATION = 0
 VERTICAL_REPRESENTATION = 1
-
 
 def run_before(lastfunc, *args1, **kwargs1):
     """
@@ -80,6 +80,7 @@ def get_3d_points_cloud(matcher, file_index=0, debug=False):
     return inlier_points_in_3d
 
 
+
 def match_next_pair(cur_file):
     _ = get_3d_points_cloud(matcher, file_index=cur_file, debug=True)
     cur_kps1, cur_kps2 = matcher.get_kp()
@@ -90,22 +91,16 @@ def match_next_pair(cur_file):
 if __name__ == '__main__':
     random.seed(6)
 
-
-    im0l, im0r = read_images(0)
-    im1l, im1r = read_images(1)
-    # cache[0] = {FRAMES: (img1, img2), LEFT: None, RIGHT: None}
-
     k, m1, m2 = utils.read_cameras()
     matcher = Matcher(display=HORIZONTAL_REPRESENTATION)
-
     # Section 3.1
     # Matching features, remove outliers and triangulate
+
     prev_kps1, prev_kps2, prev_matches = match_next_pair(cur_file = 0)
     x1, y1, x2, y2, prev_indices_mapping = coords_from_kps(prev_matches, prev_kps1, prev_kps2)
 
     prev_indices_mapping = array_to_dict(prev_indices_mapping)
     cur_kps1, cur_kps2, cur_matches = match_next_pair(cur_file = 1)
-    print(im1r == matcher.cache[1][4][1])
     x1t, y1t, x2t, y2t, cur_indices_mapping = coords_from_kps(cur_matches, cur_kps1, cur_kps2)
     cur_indices_mapping = array_to_dict(cur_indices_mapping)
     # Section 3.2
