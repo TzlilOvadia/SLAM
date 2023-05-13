@@ -88,21 +88,43 @@ def match_next_pair(cur_file):
     return cur_kps1, cur_kps2, cur_matches
 
 
+def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mapping):
+    """
+
+    :param consecutive_matches:
+    :param prev_indices_mapping:
+    :param cur_indices_mapping:
+    :return:
+    """
+    concensus_matces = []
+    for idx, (m,n) in enumerate(consecutive_matches):
+        prev_left_kp = m.queryIdx
+        cur_left_kp = m.trainIdx
+        try:
+            cur = cur_indices_mapping[cur_left_kp]
+            prev = prev_indices_mapping[prev_left_kp]
+            concensus_matces.append((prev, cur, idx))
+        except KeyError:
+            continue
+    return concensus_matces
+
 if __name__ == '__main__':
     random.seed(6)
 
     k, m1, m2 = utils.read_cameras()
     matcher = Matcher(display=HORIZONTAL_REPRESENTATION)
+
     # Section 3.1
     # Matching features, remove outliers and triangulate
-
-    prev_kps1, prev_kps2, prev_matches = match_next_pair(cur_file = 0)
+    prev_kps1, prev_kps2, prev_matches = match_next_pair(cur_file=0)
     x1, y1, x2, y2, prev_indices_mapping = coords_from_kps(prev_matches, prev_kps1, prev_kps2)
-
+    img_0_matches = matcher.get_matches()
     prev_indices_mapping = array_to_dict(prev_indices_mapping)
-    cur_kps1, cur_kps2, cur_matches = match_next_pair(cur_file = 1)
+
+    cur_kps1, cur_kps2, cur_matches = match_next_pair(cur_file=1)
     x1t, y1t, x2t, y2t, cur_indices_mapping = coords_from_kps(cur_matches, cur_kps1, cur_kps2)
     cur_indices_mapping = array_to_dict(cur_indices_mapping)
+    img_1_matches = matcher.get_matches()
     # Section 3.2
     # Match features between the two left images (left0 and left1)
     consecutive_matches = matcher.match_between_consecutive_frames(0, 1)
@@ -113,13 +135,28 @@ if __name__ == '__main__':
     #   Matching points in image 1 between left and right
     #   Matching points in left frame between image 0 and image 1
     # We can try and match
-    concensus_matces = []
-    for idx, match in enumerate(consecutive_matches):
-        prev_left_kp = match.queryIdx
-        cur_left_kp = match.trainIdx
-        try:
-            cur = cur_indices_mapping[cur_left_kp]
-            prev = prev_indices_mapping[prev_left_kp]
-            concensus_matces.append((prev,cur,idx))
-        except KeyError:
-            continue
+
+    # Consensus matches are constructed as follows:
+    # each element in the array is a 3-way tuple ->> (img_0_idx, img_1_idx, img0to1_matches_idx)
+    consensus_matches = consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mapping)
+    prev, current, consecutive = np.array(consensus_matches)[:,np.arange(3)].T
+    xs1_prev, ys1_prev, xs2_prev, ys2_prev, prev_indices_mapping = coords_from_kps(np.array(img_0_matches)[prev], prev_kps1, prev_kps2)
+
+    # define the 3D points in the world coordinate system
+    point_3d = []
+    # define the corresponding 2D points in the image coordinate system
+    xs1, ys1, xs2, ys2, cur_indices_mapping = coords_from_kps(np.array(img_1_matches)[current], cur_kps1, cur_kps2)
+    for idx in range(len(xs1)):
+        point_3d.append(least_squares((xs1_prev[idx], ys1_prev[idx]), (xs2_prev[idx], ys2_prev[idx]), k @ m1, k @ m2))
+
+    # Choose 4 consensus keypoints and their corresponding 3D points and perform perspective-n-point (PnP)
+    # estimation to compute the pose of the camera
+    while True:
+        idx = np.random.choice(np.arange(4), 4, replace=False)
+        success, R_vec, t_vec = cv2.solvePnP(np.array(point_3d,dtype=np.float32)[idx], np.array(cur_indices_mapping,dtype=np.float32).T[idx], k, None, flags=cv2.SOLVEPNP_P3P)
+        if success:
+            extrinsic_left_camera_matrix_0_to_1 = rodriguez_to_mat(R_vec, t_vec)
+            np.vstack(extrinsic_left_camera_matrix_0_to_1, [np.array([0, 0, 0, 1])])
+            break
+
+    #TODO: Update the pose of the camera in the world coordinate system

@@ -132,6 +132,6 @@ def draw_matches(matches, im1, im2, img1_kp, img2_kp, num_of_matches=5000, debug
                               flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     if display is VERTICAL_REPRESENTATION:
         img3=cv2.rotate(img3, cv2.ROTATE_90_CLOCKWISE)
-    plt.figure(figsize=(15, 15))
+    plt.figure(figsize=(4, 3))
     plt.imshow(img3)
     plt.show()
