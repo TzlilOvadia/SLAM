@@ -135,13 +135,15 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
     return concensus_matces
 
 
-def solvePnP(kp, corresponding_points, camera_intrinsic):
+def solvePnP(kp, corresponding_points, camera_intrinsic, flags=0):
     points_3d = np.array([m[4] for m in corresponding_points])
     points_2d = np.array([kp[m[2]].pt for m in corresponding_points])
-    success, R_vec, t_vec = cv2.solvePnP(points_3d, points_2d, camera_intrinsic, None, flags=cv2.SOLVEPNP_P3P)
-    camera_extrinsic = rodriguez_to_mat(R_vec, t_vec)
-    return camera_extrinsic
-
+    success, R_vec, t_vec = cv2.solvePnP(points_3d, points_2d, camera_intrinsic, None, flags=flags)
+    if success:
+        camera_extrinsic = rodriguez_to_mat(R_vec, t_vec)
+        return camera_extrinsic
+    else:
+        return None
 
 def find_supporters(Rt, m2, consensus_matches, k, kp_left, kp_right, thresh=2, debug=True, file_index = 0):
     are_good_matches = np.zeros(len(consensus_matches))
@@ -164,11 +166,38 @@ def find_supporters(Rt, m2, consensus_matches, k, kp_left, kp_right, thresh=2, d
         num_good_matches += is_supporter
     if debug:
         print(f"out of {len(consensus_matches)} matches, {num_good_matches} are supporters for this Rt choice")
-    return are_good_matches
+    return are_good_matches, num_good_matches
 
 
-def ransac_for_pnp():
-    ...
+def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, right_camera_matrix, thresh=2, debug=False):
+    max_iterations = 100
+    num_points_for_model = 4
+    best_num_of_supporters = 0
+    best_candidate_supporters_boolean_array = []
+    for i in range(max_iterations):
+        candidate_4_points = random.sample(points_to_choose_from, k=num_points_for_model)
+        candidate_Rt = solvePnP(kp_left, candidate_4_points, intrinsic_matrix, flags=cv2.SOLVEPNP_P3P)
+        if candidate_Rt is None:
+            continue
+        are_supporters_boolean_array, num_good_matches = find_supporters(candidate_Rt, right_camera_matrix, points_to_choose_from, intrinsic_matrix,
+                                              kp_left=kp_left, kp_right=kp_right, thresh=thresh, debug=debug)
+        if num_good_matches >= best_num_of_supporters:
+            best_4_points_candidate = candidate_4_points
+            best_candidate_supporters_boolean_array = are_supporters_boolean_array
+            best_Rt_candidate = candidate_Rt
+            best_num_of_supporters = num_good_matches
+            print(best_num_of_supporters)
+    # We now refine the winner by calculating a transormation for all the supporters/inliers
+    supporters = [point_to_choose for ind, point_to_choose in enumerate(points_to_choose_from) if best_candidate_supporters_boolean_array[ind]]
+    refined_Rt = solvePnP(kp_left, supporters, intrinsic_matrix, flags=0)
+    if refined_Rt is None:
+        refined_Rt = best_Rt_candidate
+    _, num_good_matches = find_supporters(refined_Rt, right_camera_matrix, points_to_choose_from, intrinsic_matrix,
+                                                                     kp_left=kp_left, kp_right=kp_right, thresh=thresh,
+                                                                     debug=debug)
+    if num_good_matches >= best_num_of_supporters:
+        best_Rt_candidate = refined_Rt
+    return best_Rt_candidate
 
 
 if __name__ == '__main__':
@@ -212,13 +241,18 @@ if __name__ == '__main__':
         # estimation to compute the pose of the camera
         first_4_consensus_matches = random.sample(consensus_matches, k=4)
         kp1, kp2 = matcher.get_kp(idx=1)
-        Rt = solvePnP(kp1, first_4_consensus_matches, k)
-        plot_four_cameras(Rt, m2)  # plotting the positions of the camera in the 4 images (Section 3.3)
-        are_good_matches = find_supporters(Rt, m2, consensus_matches, k, kp_left=kp1, kp_right=kp2, thresh=2, debug=True, file_index=1)
-        draw_supporting_matches(0, matcher, consensus_matches, are_good_matches)  # (Section 3.4)
+        Rt = solvePnP(kp1, first_4_consensus_matches, k, flags=cv2.SOLVEPNP_P3P)
+        if Rt is None:
+            continue
+        #plot_four_cameras(Rt, m2)  # plotting the positions of the camera in the 4 images (Section 3.3)
+        are_good_matches, num_good_matches = find_supporters(Rt, m2, consensus_matches, k, kp_left=kp1, kp_right=kp2, thresh=2, debug=True, file_index=1)
+        #draw_supporting_matches(0, matcher, consensus_matches, are_good_matches)  # (Section 3.4)
 
     # ------------------------------------------------Section 3.5-----------------------------------------------
     # We now use the Ransac frame work to optimize the choice of Rt on given 2 sets of images
+    kp1, kp2 = matcher.get_kp(idx=1)
+    ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
+                   debug=False)
     exit()
 
 
