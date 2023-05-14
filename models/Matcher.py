@@ -50,9 +50,9 @@ class Matcher:
 
         # I Changed this function to keep each frame array into the cache for later use
         if idx not in self.cache:
-            self.cache[self._file_index] = {FRAMES: (self._img1, self._img2), LEFT: None, RIGHT: None}
+            self.cache[idx] = {FRAMES: (self._img1, self._img2), LEFT: None, RIGHT: None}
         else:
-            self.cache[self._file_index][FRAMES] = (self._img1, self._img2)
+            self.cache[idx][FRAMES] = (self._img1, self._img2)
 
     def get_matches(self, idx=None) -> np.ndarray:
         if idx is None:
@@ -109,7 +109,7 @@ class Matcher:
 
 
 
-    def find_matching_features(self, with_significance_test=True, debug=False):
+    def find_matching_features(self, with_significance_test=True, debug=False, idx=0):
         """Find matching features between the img1 and img2 images using the matcher specified in the constructor.
          Apply a threshold to the matches to filter out poor matches and then call the drawMatchesKnn() function to
          display the matching features in a new image."""

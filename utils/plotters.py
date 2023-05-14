@@ -19,17 +19,30 @@ def gen_hist(data, bins, title="", x="X", y="Y"):
     plt.xlabel(x)
     plt.show()
 
-def draw_supporting_matches(file_index, matcher, consensus_matches, supporting_indices):
-    im1, im2 = matcher.get_images(file_index)
-    kp1, kp2 = matcher.get_kp(file_index)
+
+def plot_trajectories(camera_positions, gt_camera_positions):
+    plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
+    plt.scatter(x=gt_camera_positions[:, 0], y=gt_camera_positions[:, 2], color='orange', label='ground truth trajectory', s=0.75)
+    plt.xlabel("X")
+    plt.ylabel("Z")
+    plt.title("Our Trajectory Vs Ground Truth Trajectory")
+    plt.legend()
+    plt.show()
+
+
+def draw_supporting_matches(file_index, matcher, matches, supporting_indices):
+    im1_left = matcher.get_images(file_index - 1)[0]
+    im2_left = matcher.get_images(file_index)[0]
+    kp1_left = matcher.get_kp(file_index - 1)[0]
+    kp2_left = matcher.get_kp(file_index)[0]
     colors = [(255,0,0), (0,255,0)]
-    img3 = cv2.hconcat([cv2.cvtColor(im1, cv2.COLOR_GRAY2BGR), cv2.cvtColor(im2, cv2.COLOR_GRAY2BGR)])
-    for i, match in enumerate(consensus_matches):
-        img1_idx = match[0]
-        img2_idx = match[1]
-        (x1, y1) = kp1[img1_idx].pt
-        (x2, y2) = kp2[img2_idx].pt
-        x2 += im1.shape[1]  # Shift the second image points down by the height of the first image
+    img3 = cv2.vconcat([cv2.cvtColor(im1_left, cv2.COLOR_GRAY2BGR), cv2.cvtColor(im2_left, cv2.COLOR_GRAY2BGR)])
+    for i, match in enumerate(matches):
+        img1_idx = match[0].queryIdx
+        img2_idx = match[0].trainIdx
+        (x1, y1) = kp1_left[img1_idx].pt
+        (x2, y2) = kp2_left[img2_idx].pt
+        y2 += im1_left.shape[0]  # Shift the second image points down by the height of the first image
         color = colors[int(supporting_indices[i])]
         cv2.line(img3, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=2)
 

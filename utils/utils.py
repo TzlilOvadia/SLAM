@@ -7,6 +7,7 @@ WINDOWS_OS_PATH = "../dataset/sequences/05\\"
 SEP = "\\" if os.name == 'nt' else "/"
 DATA_PATH = WINDOWS_OS_PATH if os.name == 'nt' else MAC_OS_PATH
 
+WINDOWS_GT_PATH = "../dataset/poses/05.txt"
 
 def read_images(idx) -> (np.ndarray, np.ndarray):
     """
@@ -20,6 +21,10 @@ def read_images(idx) -> (np.ndarray, np.ndarray):
 
     return _img1, _img2
 
+
+def read_gt():
+    data = np.loadtxt(WINDOWS_GT_PATH)
+    return data.reshape(data.shape[0], 3, 4)
 
 def coords_from_kps(matches, kp1, kp2):
     """
