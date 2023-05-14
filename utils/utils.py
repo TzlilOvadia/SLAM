@@ -92,9 +92,10 @@ def rectificatied_stereo_pattern(y1, y2, indices_mapping, thresh=1):
     :return:
     """
     inliers_idx, outliers_idx = _rectified_stereo_classifier(y1, y2, thresh)
-    img1in, img2in = indices_mapping[0, inliers_idx], indices_mapping[1, inliers_idx]
+    inlier_indices_mapping = indices_mapping[:, inliers_idx]
+    img1in, img2in = inlier_indices_mapping[0], inlier_indices_mapping[1]
     img1out, img2out = indices_mapping[0, outliers_idx], indices_mapping[1, outliers_idx]
-    return img1in, img2in, img1out, img2out
+    return img1in, img2in, img1out, img2out, inlier_indices_mapping
 
 def array_to_dict(arr):
     """

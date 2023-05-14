@@ -47,22 +47,32 @@ class Matcher:
         """
         self._file_index = idx
         self._img1, self._img2 = read_images(idx)
-        if self.display is VERTICAL_REPRESENTATION:
-            self._img1 = cv2.rotate(self._img1, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            self._img2 = cv2.rotate(self._img2, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         # I Changed this function to keep each frame array into the cache for later use
-        self.cache[self._file_index] = {FRAMES: (self._img1, self._img2), LEFT: None, RIGHT: None}
+        if idx not in self.cache:
+            self.cache[self._file_index] = {FRAMES: (self._img1, self._img2), LEFT: None, RIGHT: None}
+        else:
+            self.cache[self._file_index][FRAMES] = (self._img1, self._img2)
 
-    def get_matches(self) -> np.ndarray:
-        return self._matches
+    def get_matches(self, idx=None) -> np.ndarray:
+        if idx is None:
+            return self._matches
+        return self.cache[idx][MATCHES]
 
-    def get_kp(self):
-        return self._img1_kp, self._img2_kp
+    def get_kp(self, idx=None):
+        if idx is None:
+            return self._img1_kp, self._img2_kp
+        return self.cache[idx][LEFT][0], self.cache[idx][RIGHT][0]
 
     def get_dsc(self):
         return self._img1_dsc,self._img2_dsc
 
+    def get_images(self, file_index=0):
+        if file_index in self.cache:
+            return self.cache[file_index][FRAMES]
+        else:
+            self.read_images(file_index)
+            return self._img1, self._img2
 
     def detect(self, debug=False):
         """Detect key-points for the img1 and img2 images using the algorithm specified
@@ -90,7 +100,8 @@ class Matcher:
     def detect_and_compute(self, file_index=0):
         """Detect and compute the key-points and descriptors for the img1 and img2 images using the algorithm specified
         in the constructor."""
-        self.read_images(file_index)
+        if self._file_index != file_index:
+            self.read_images(file_index)
         self._img1_kp, self._img1_dsc = self.algo.detectAndCompute(self._img1, None)
         self._img2_kp, self._img2_dsc = self.algo.detectAndCompute(self._img2, None)
         self.cache[self._file_index][LEFT] = (np.copy(self._img1_kp), np.copy(self._img1_dsc))
@@ -124,7 +135,17 @@ class Matcher:
             print(f"When applying significance test with threshold {self.threshold}, out of {len(self._matches)} matches {len(filtered)} matches remained")
         self._matches = filtered
 
-
+    def filter_matches(self, indices, file_index):
+        """
+        Keeps only matches with given indices.
+        :param indices:
+        :return:
+        """
+        matches = []
+        for ind in indices:
+            matches.append(self._matches[ind])
+        self._matches = matches
+        self.cache[file_index][MATCHES] = self._matches
 
     @staticmethod
     def apply_thresholds(matches, threshold):
@@ -134,7 +155,7 @@ class Matcher:
                 filtered.append([m])
         return filtered
 
-    def match_between_consecutive_frames(self, prev_frame_index, cur_frame_index, debug=True):
+    def match_between_consecutive_frames(self, prev_frame_index, cur_frame_index, thresh=0.1, debug=False):
         """
         given to frames indices, this function will compute their matching points and cache it.
         :param prev_frame_index:
@@ -150,10 +171,11 @@ class Matcher:
         matches = self.matcher.knnMatch(prev_dsc, cur_dsc, k=2)
         filtered = []
         for i, (m, n) in enumerate(matches):
-            if m.distance < 0.1 * n.distance:
+            if m.distance < thresh * n.distance:
                 filtered.append([m])
         self.cache[cur_frame_index][CONSECUTIVE] = filtered
-        filtered = Matcher.apply_thresholds(matches, .1)
-        draw_matches(filtered, prev_im1, cur_im1, prev_kps, cur_kps, num_of_matches=5000, debug=False, display=HORIZONTAL_REPRESENTATION)
-        return matches
+        #filtered = Matcher.apply_thresholds(matches, .1)
+        if debug:
+            draw_matches(filtered, prev_im1, cur_im1, prev_kps, cur_kps, num_of_matches=5000, debug=debug, display=VERTICAL_REPRESENTATION)
+        return filtered
 

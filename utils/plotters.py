@@ -19,6 +19,25 @@ def gen_hist(data, bins, title="", x="X", y="Y"):
     plt.xlabel(x)
     plt.show()
 
+def draw_supporting_matches(file_index, matcher, consensus_matches, supporting_indices):
+    im1, im2 = matcher.get_images(file_index)
+    kp1, kp2 = matcher.get_kp(file_index)
+    colors = [(255,0,0), (0,255,0)]
+    img3 = cv2.hconcat([cv2.cvtColor(im1, cv2.COLOR_GRAY2BGR), cv2.cvtColor(im2, cv2.COLOR_GRAY2BGR)])
+    for i, match in enumerate(consensus_matches):
+        img1_idx = match[0]
+        img2_idx = match[1]
+        (x1, y1) = kp1[img1_idx].pt
+        (x2, y2) = kp2[img2_idx].pt
+        x2 += im1.shape[1]  # Shift the second image points down by the height of the first image
+        color = colors[int(supporting_indices[i])]
+        cv2.line(img3, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=2)
+
+    plt.figure(figsize=(4, 3))
+    plt.imshow(img3)
+    plt.show()
+
+
 
 def draw_inlier_and_outlier_matches(img1, kp1, img2, kp2, img1in, img2in, img1out, img2out, title=""):
     """
@@ -115,23 +134,44 @@ def draw_matches(matches, im1, im2, img1_kp, img2_kp, num_of_matches=5000, debug
     :param num_of_matches: Maximum number of matches to be randomly chosen and displayed
     :return: None
     """
-
     current_num_of_matches = len(matches)
     if current_num_of_matches >= num_of_matches:
         matches = random.sample(matches, num_of_matches)
     print(f"drawing {len(matches)} matches")
 
-    if debug:
-        im_1_pt = img1_kp[212]
-        im_2_pt = img2_kp[135]
-        im1 = cv2.circle(im1, (np.int(im_1_pt.pt[0]), np.int(im_1_pt.pt[1])), 10, 3, thickness=3, lineType=8,
-                         shift=0)
-        im2 = cv2.circle(im2, (np.int(im_2_pt.pt[0]), np.int(im_2_pt.pt[1])), 10, 3, thickness=3, lineType=8,
-                         shift=0)
     img3 = cv2.drawMatchesKnn(im1, img1_kp, im2, img2_kp, matches, None,
                               flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     if display is VERTICAL_REPRESENTATION:
-        img3=cv2.rotate(img3, cv2.ROTATE_90_CLOCKWISE)
+        colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in matches]
+        img3 = cv2.vconcat([cv2.cvtColor(im1, cv2.COLOR_GRAY2BGR), cv2.cvtColor(im2, cv2.COLOR_GRAY2BGR)])
+        for i, match in enumerate(matches):
+            img1_idx = match[0].queryIdx
+            img2_idx = match[0].trainIdx
+            (x1, y1) = img1_kp[img1_idx].pt
+            (x2, y2) = img2_kp[img2_idx].pt
+            y2 += im1.shape[0]  # Shift the second image points down by the height of the first image
+            color = colors[i]
+            cv2.line(img3, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=2)
+
     plt.figure(figsize=(4, 3))
     plt.imshow(img3)
     plt.show()
+
+
+def plot_four_cameras(Rt, m2):
+    R, t = Rt[:, 0:3], Rt[:, 3]
+    left_0 = np.array([0, 0, 0])
+    right_0 = - m2[:, 3]
+    left_1 = -R.T @ t
+    right_1 = left_1 - m2[:, 3]
+    fig = plt.figure()
+    plt.scatter(x=[left_0[0]], y=[left_0[2]], color='blue', label='left_0')
+    plt.scatter(x=[right_0[0]], y=[right_0[2]], color=(0.75, 0.75, 1), label='right_0')
+    plt.scatter(x=[left_1[0]], y=[left_1[2]], color='red', label='left_1')
+    plt.scatter(x=[right_1[0]], y=[right_1[2]], color=(1, 0.75, 0.75), label='right_1')
+    plt.title("X and Z locations of 4 cameras in two consecutive frames")
+    plt.xlabel("X")
+    plt.ylabel("Z")
+    plt.legend()
+    plt.show()
+    a=5
