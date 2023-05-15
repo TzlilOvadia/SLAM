@@ -74,14 +74,14 @@ def draw_supporting_matches(file_index, matcher, matches, supporting_indices):
         (x1, y1) = kp1_left[img1_idx].pt
         (x2, y2) = kp2_left[img2_idx].pt
         y2 += im1_left.shape[0]  # Shift the second image points down by the height of the first image
-        color = colors[bool(supporting_indices[i])]
+        color = colors[int(supporting_indices[i])] if supporting_indices is not None else colors[1]
         # Assign different thickness to the unsupported indices
-        thickness = 1 if supporting_indices[i] else 4
+        thickness = 1 if supporting_indices is None or supporting_indices[i] else 4
         cv2.line(img3, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=thickness)
 
     plt.figure(figsize=(16, 9))
     plt.imshow(img3)
-    plt.title("Supporting [Green], Unsupported [Red]")
+    plt.title("Supporting [Green], Unsupported [Red]" if supporting_indices is not None else "Matches between left_0 to left_1")
     plt.show()
 
 

@@ -307,7 +307,7 @@ def q2():
 
     # Matching features between the two consecutive left images (left0 and left1)
     consecutive_matches = matcher.match_between_consecutive_frames(0, 1, thresh=0.4)
-    # draw_supporting_matches(1, matcher, consecutive_matches, np.arange(len(consecutive_matches)))
+    draw_supporting_matches(1, matcher, consecutive_matches, None)
 
 
 def q3_q4():
