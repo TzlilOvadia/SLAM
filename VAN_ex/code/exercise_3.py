@@ -202,7 +202,6 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
             best_candidate_supporters_boolean_array = are_supporters_boolean_array
             best_Rt_candidate = candidate_Rt
             best_num_of_supporters = num_good_matches
-            #print(best_num_of_supporters)
         epsilon = min(epsilon, 1 - (num_good_matches / len(are_supporters_boolean_array)))
         I = min(ransac_num_of_iterations(epsilon), max_iterations)
         print(f"at iteration {i} I={I}")
@@ -230,8 +229,10 @@ def apply_Rt_transformation(list_of_3d_points, Rt):
 
 
 def ransac_num_of_iterations(epsilon=0.001, p=0.999, s=4):
-    I = np.ceil(np.log(1-p) / np.log(1 - (1 - epsilon) ** s))
-    return int(I)
+    if epsilon == 0:
+        return 0
+    return int(np.ceil(np.log(1-p) / np.log(1 - (1 - epsilon) ** s)))
+
 
 def track_camera_for_many_images(thresh=0.4):
     start_time = time.time()
