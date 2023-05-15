@@ -79,9 +79,9 @@ def draw_supporting_matches(file_index, matcher, matches, supporting_indices):
         thickness = 1 if supporting_indices[i] else 4
         cv2.line(img3, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=thickness)
 
-    plt.figure(figsize=(4, 3))
+    plt.figure(figsize=(16, 9))
     plt.imshow(img3)
-    plt.title("Supporting Indices [Green], Unsupported Indices [Red]")
+    plt.title("Supporting [Green], Unsupported [Red]")
     plt.show()
 
 

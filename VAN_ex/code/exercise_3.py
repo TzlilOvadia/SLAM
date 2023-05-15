@@ -10,8 +10,7 @@ from utils.utils import rectificatied_stereo_pattern, coords_from_kps, array_to_
 from matplotlib import pyplot as plt
 import time
 
-cache = {}
-matcher = Matcher()
+
 
 #############################################
 ################# Constants #################
@@ -286,39 +285,43 @@ def get_gt_trajectory():
         gt_camera_positions[i] = - R_cum.T @ t_cum
     return gt_camera_positions
 
-if __name__ == '__main__':
-    random.seed(6)
 
-    k, m1, m2 = utils.read_cameras()
+#------------------------------------------------- EXERCISE QUESTIONS ---------------------------------------
+
+def q1():
     matcher = Matcher(display=VERTICAL_REPRESENTATION)
 
-    # ------------------------------------------------Section 3.1-----------------------------------------------
-
-    # Matching features in stereo images and creating points clouds, both in frame 0 and in frame 1
     prev_inlier_indices_mapping = match_next_pair(0, matcher)
-    prev_points_cloud, prev_ind_to_3d_point_dict = get_3d_points_cloud(prev_inlier_indices_mapping, k, m1, m2, matcher, file_index=0, debug=True)
-    prev_indices_mapping = array_to_dict(prev_inlier_indices_mapping)
-    img_0_matches = matcher.get_matches(idx=0)
+    _, _ = get_3d_points_cloud(prev_inlier_indices_mapping, k, m1, m2, matcher, file_index=0, debug=True)
 
     cur_inlier_indices_mapping = match_next_pair(1, matcher)
-    cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k, m1, m2, matcher, file_index=1, debug=True)
-    cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
-    img_1_matches = matcher.get_matches(idx=1)
-    # ------------------------------------------------Section 3.2-----------------------------------------------
+    _, _ = get_3d_points_cloud(cur_inlier_indices_mapping, k, m1, m2, matcher, file_index=1, debug=True)
+
+
+def q2():
+
+    matcher = Matcher(display=VERTICAL_REPRESENTATION)
+
+    match_next_pair(0, matcher)
+    match_next_pair(1, matcher)
 
     # Matching features between the two consecutive left images (left0 and left1)
     consecutive_matches = matcher.match_between_consecutive_frames(0, 1, thresh=0.4)
     # draw_supporting_matches(1, matcher, consecutive_matches, np.arange(len(consecutive_matches)))
-    # -----------------------------------------Section 3.3 + Section 3.4-----------------------------------------
 
-    # Now that we have:
-    #   Matching points in image 0 between left and right
-    #   Matching points in image 1 between left and right
-    #   Matching points in left frame between image 0 and image 1
-    # We find the transformation between frame 0 and frame 1 based on that
 
-    # Consensus matches are constructed as follows: each element in the array is a 5-way tuple ->>
-    # (left_0_idx, right_0_idx, left_1_idx, right_1_idx, corresponding 3d point based on frame 0)
+def q3_q4():
+    random.seed(6)
+    # code from previous questions excluding 3.3
+    matcher = Matcher(display=VERTICAL_REPRESENTATION)
+    prev_inlier_indices_mapping = match_next_pair(0, matcher)
+    prev_points_cloud, prev_ind_to_3d_point_dict = get_3d_points_cloud(prev_inlier_indices_mapping, k, m1, m2, matcher, file_index=0, debug=False)
+    prev_indices_mapping = array_to_dict(prev_inlier_indices_mapping)
+    cur_inlier_indices_mapping = match_next_pair(1, matcher)
+    cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
+    consecutive_matches = matcher.match_between_consecutive_frames(0, 1, thresh=0.4)
+
+    # from here, new code relevant for 3.3-3.4
     consensus_matches, filtered_matches = consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mapping, prev_ind_to_3d_point_dict)
     print(f"----------looking for supporters for frame 1----------")
     for i in range(1):
@@ -333,39 +336,62 @@ if __name__ == '__main__':
         are_good_matches, num_good_matches = find_supporters(Rt, m2, consensus_matches, k, kp_left=kp1, kp_right=kp2, thresh=2, debug=True, file_index=1)
         draw_supporting_matches(1, matcher, filtered_matches, are_good_matches)  # (Section 3.4)
 
-    # # ------------------------------------------------Section 3.5-----------------------------------------------
+
+def q5():
+    random.seed(6)
+    # code from previous questions excluding 3.5
+    matcher = Matcher(display=VERTICAL_REPRESENTATION)
+    prev_inlier_indices_mapping = match_next_pair(0, matcher)
+    prev_points_cloud, prev_ind_to_3d_point_dict = get_3d_points_cloud(prev_inlier_indices_mapping, k, m1, m2, matcher, file_index=0, debug=False)
+    prev_indices_mapping = array_to_dict(prev_inlier_indices_mapping)
+    cur_inlier_indices_mapping = match_next_pair(1, matcher)
+    cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k, m1, m2, matcher, file_index=1, debug=False)
+    cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
+    consecutive_matches = matcher.match_between_consecutive_frames(0, 1, thresh=0.4)
+    consensus_matches, filtered_matches = consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mapping, prev_ind_to_3d_point_dict)
+
+    # from here, new code relevant for 3.5
+
     # # We now use the Ransac frame work to optimize the choice of Rt on given 2 sets of images
     kp1, kp2 = matcher.get_kp(idx=1)
     Rt = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
-                   debug=False, max_iterations=10)
+                        debug=False, max_iterations=10)
     # plotting the point clouds for the first two frames
     # transforming the first point cloud according to the Rt we found
     prev_points_cloud = np.array(prev_points_cloud).T
     cur_points_cloud = np.array(cur_points_cloud).T
 
-    prev_points_cloud = prev_points_cloud[:,prev_points_cloud[2] > 0]
-    cur_points_cloud = cur_points_cloud[:,cur_points_cloud[2] > 0]
+    prev_points_cloud = prev_points_cloud[:, prev_points_cloud[2] > 0]
+    cur_points_cloud = cur_points_cloud[:, cur_points_cloud[2] > 0]
 
     transformed_point_cloud = apply_Rt_transformation(prev_points_cloud, Rt)
     cur_points_cloud = cur_points_cloud.T.tolist()
-    prev_points_cloud = prev_points_cloud.T.tolist()
     draw_3d_points(transformed_point_cloud,
                    title=f"3d points after transforming from image #0 [Blue] to image #1 [Red]",
-                   other_points=cur_points_cloud,pov=DEFAULT_POV)
+                   other_points=cur_points_cloud, pov=DEFAULT_POV)
     draw_3d_points(transformed_point_cloud,
                    title=f"3d points after transforming from image #0 [Blue] to image #1 [Red]",
                    other_points=cur_points_cloud, num_points=np.inf, pov=SIDE_POV)
-    draw_3d_points(transformed_point_cloud, title=f"3d points after transforming from image #0 [black] to image #1 [Red]",
+    draw_3d_points(transformed_point_cloud,
+                   title=f"3d points after transforming from image #0 [black] to image #1 [Red]",
                    other_points=cur_points_cloud, num_points=np.inf, pov=TOP_POV)
 
     are_good_matches, num_good_matches = find_supporters(Rt, m2, consensus_matches, k, kp_left=kp1, kp_right=kp2,
                                                          thresh=2, debug=True, file_index=1)
     draw_supporting_matches(1, matcher, filtered_matches, are_good_matches)
-    #
-    # # ------------------------------------------------Section 3.6-----------------------------------------------
-    # # Now we run the same process iteratively on the whole sequence of images.
+
+
+def q6():
     camera_positions = track_camera_for_many_images()
     gt_camera_positions = get_gt_trajectory()
     plot_trajectories(camera_positions, gt_camera_positions)
 
 
+if __name__ == '__main__':
+    random.seed(6)
+    k, m1, m2 = utils.read_cameras()
+    q1()
+    q2()
+    q3_q4()
+    q5()
+    q6()
