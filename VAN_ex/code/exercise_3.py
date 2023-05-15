@@ -12,11 +12,20 @@ import time
 
 cache = {}
 matcher = Matcher()
+
+#############################################
+################# Constants #################
+#############################################
 KPS = 0
 MATCHES = 1
 DSC = 2
 HORIZONTAL_REPRESENTATION = 0
 VERTICAL_REPRESENTATION = 1
+DEFAULT_POV = 0
+TOP_POV = 80
+SIDE_POV = -120
+
+#############################################
 
 def run_before(lastfunc, *args1, **kwargs1):
     """
@@ -288,12 +297,12 @@ if __name__ == '__main__':
 
     # Matching features in stereo images and creating points clouds, both in frame 0 and in frame 1
     prev_inlier_indices_mapping = match_next_pair(0, matcher)
-    prev_points_cloud, prev_ind_to_3d_point_dict = get_3d_points_cloud(prev_inlier_indices_mapping, k, m1, m2, matcher, file_index=0, debug=False)
+    prev_points_cloud, prev_ind_to_3d_point_dict = get_3d_points_cloud(prev_inlier_indices_mapping, k, m1, m2, matcher, file_index=0, debug=True)
     prev_indices_mapping = array_to_dict(prev_inlier_indices_mapping)
     img_0_matches = matcher.get_matches(idx=0)
 
     cur_inlier_indices_mapping = match_next_pair(1, matcher)
-    cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k, m1, m2, matcher, file_index=1, debug=False)
+    cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k, m1, m2, matcher, file_index=1, debug=True)
     cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
     img_1_matches = matcher.get_matches(idx=1)
 
@@ -326,26 +335,33 @@ if __name__ == '__main__':
         are_good_matches, num_good_matches = find_supporters(Rt, m2, consensus_matches, k, kp_left=kp1, kp_right=kp2, thresh=2, debug=True, file_index=1)
         draw_supporting_matches(1, matcher, filtered_matches, are_good_matches)  # (Section 3.4)
 
-    # ------------------------------------------------Section 3.5-----------------------------------------------
-    # We now use the Ransac frame work to optimize the choice of Rt on given 2 sets of images
+    # # ------------------------------------------------Section 3.5-----------------------------------------------
+    # # We now use the Ransac frame work to optimize the choice of Rt on given 2 sets of images
     kp1, kp2 = matcher.get_kp(idx=1)
     Rt = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
                    debug=False, max_iterations=10)
     # plotting the point clouds for the first two frames
-    draw_3d_points(prev_points_cloud, title=f"3d points from triangulation from image #0")
+    # draw_3d_points(prev_points_cloud, title=f"3d points from triangulation from image #0")
     # transforming the first point cloud according to the Rt we found
     transformed_point_cloud = apply_Rt_transformation(prev_points_cloud, Rt)
-    draw_3d_points(transformed_point_cloud, title=f"3d points from applying transformation from image #0 to image #1")
+
+    draw_3d_points(transformed_point_cloud,
+                   title=f"3d points after transforming from image #0 [black] to image #1 [red]",
+                   other_points=prev_points_cloud, pov=DEFAULT_POV)
+    draw_3d_points(transformed_point_cloud,
+                   title=f"3d points after transforming from image #0 [black] to image #1 [red]",
+                   other_points=prev_points_cloud, num_points=np.inf, pov=SIDE_POV)
+    draw_3d_points(transformed_point_cloud, title=f"3d points after transforming from image #0 [black] to image #1 [red]",
+                   other_points=prev_points_cloud, num_points=np.inf, pov=TOP_POV)
+
     are_good_matches, num_good_matches = find_supporters(Rt, m2, consensus_matches, k, kp_left=kp1, kp_right=kp2,
                                                          thresh=2, debug=True, file_index=1)
     draw_supporting_matches(1, matcher, filtered_matches, are_good_matches)
-
-    # ------------------------------------------------Section 3.6-----------------------------------------------
-    # Now we run the same process iteratively on the whole sequence of images.
+    #
+    # # ------------------------------------------------Section 3.6-----------------------------------------------
+    # # Now we run the same process iteratively on the whole sequence of images.
     camera_positions = track_camera_for_many_images()
     gt_camera_positions = get_gt_trajectory()
     plot_trajectories(camera_positions, gt_camera_positions)
-
-
 
 

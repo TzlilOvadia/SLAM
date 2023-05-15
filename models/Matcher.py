@@ -109,16 +109,21 @@ class Matcher:
 
 
 
-    def find_matching_features(self, with_significance_test=True, debug=False, idx=0):
+    def find_matching_features(self, with_significance_test=False, debug=False, idx=0):
         """Find matching features between the img1 and img2 images using the matcher specified in the constructor.
          Apply a threshold to the matches to filter out poor matches and then call the drawMatchesKnn() function to
          display the matching features in a new image."""
         # BFMatcher with default params
+        with_significance_test = False
         if with_significance_test:
-            self._matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=2)
-            self.apply_threshold(debug)
+            matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=2)
+            matches = sorted(matches, key=lambda x: x[0].distance)
+            self._matches = matches
+            # self.apply_threshold(debug)
         else:
-            self._matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=1)
+            matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=1)
+            matches = sorted(matches, key=lambda x: x[0].distance)
+            self._matches = matches
         self.cache[self._file_index][MATCHES] = self._matches
 
 
@@ -165,16 +170,11 @@ class Matcher:
 
         prev_kps, prev_dsc = self.cache[prev_frame_index][LEFT] # Returns kp, dsc of previous left image
         cur_kps, cur_dsc = self.cache[cur_frame_index][LEFT] # Returns kp, dsc of current left image
-
         prev_im1 = self.cache[prev_frame_index][FRAMES][0]
         cur_im1 = self.cache[cur_frame_index][FRAMES][0]
         matches = self.matcher.knnMatch(prev_dsc, cur_dsc, k=2)
-        filtered = []
-        for i, (m, n) in enumerate(matches):
-            if m.distance < thresh * n.distance:
-                filtered.append([m])
+        filtered = Matcher.apply_thresholds(matches, thresh)
         self.cache[cur_frame_index][CONSECUTIVE] = filtered
-        #filtered = Matcher.apply_thresholds(matches, .1)
         if debug:
             draw_matches(filtered, prev_im1, cur_im1, prev_kps, cur_kps, num_of_matches=5000, debug=debug, display=VERTICAL_REPRESENTATION)
         return filtered
