@@ -67,20 +67,21 @@ def draw_supporting_matches(file_index, matcher, matches, supporting_indices):
     kp2_left = matcher.get_kp(file_index)[0]
     colors = [(255,0,0), (0,255,0)]
     img3 = cv2.vconcat([cv2.cvtColor(im1_left, cv2.COLOR_GRAY2BGR), cv2.cvtColor(im2_left, cv2.COLOR_GRAY2BGR)])
-    sort_matches = sorted(matches, key=lambda x: x[0].distance)[:min(len(matches), 150)]
-    for i, match in enumerate(sort_matches):
+    # sort_matches = sorted(matches, key=lambda x: x[0].distance)[:min(len(matches), 150)]
+    for i, match in enumerate(matches):
         img1_idx = match[0].queryIdx
         img2_idx = match[0].trainIdx
         (x1, y1) = kp1_left[img1_idx].pt
         (x2, y2) = kp2_left[img2_idx].pt
         y2 += im1_left.shape[0]  # Shift the second image points down by the height of the first image
-        color = colors[int(supporting_indices[i])]
+        color = colors[bool(supporting_indices[i])]
         # Assign different thickness to the unsupported indices
         thickness = 1 if supporting_indices[i] else 4
         cv2.line(img3, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=thickness)
 
     plt.figure(figsize=(4, 3))
     plt.imshow(img3)
+    plt.title("Supporting Indices [Green], Unsupported Indices [Red]")
     plt.show()
 
 
@@ -152,20 +153,15 @@ def draw_3d_points(points_list: list, title='', s=50, other_points=None, num_poi
         ax.view_init(pov)
     elif pov == SIDE_POV:
         ax.view_init(None, pov)
-    # proj = ax.get_proj()
-    # camera_pos = np.array([proj[-1][i] / proj[-1][-1] for i in range(3)])
-    # print(camera_pos)
-    # r = np.linalg.norm(camera_pos)
-    # print(f"r is {r}")
     size_scaling = _assign_size_for_each_sample(xs, ys, zs, s)
     # Create a scatter plot using scatter method, and set the color based on the z-values
-    ax.scatter(xs, ys, zs, c='blue', alpha=.4, marker='o', s=size_scaling)
+    ax.scatter(xs, ys, zs, c='blue', alpha=.4, marker='o', s=size_scaling, label="Transformed Cloud")
     if other_points is not None:
         xst, yst, zst = _trim_and_filter(num_points, other_points)
         size_scaling_t = _assign_size_for_each_sample(xst, yst, zst, s)
-        ax.scatter(xst, yst, zst, c='red', alpha=.4, marker='*', s=size_scaling_t)
+        ax.scatter(xst, yst, zst, c='red', alpha=.4, marker='*', s=size_scaling_t, label="Original Cloud")
+        ax.legend(loc='upper left')
     ax.auto_scale_xyz(xs,ys,zs)
-
     ax.set_xlabel('X', fontsize=15)
     ax.set_ylabel('Y', fontsize=15)
     ax.set_zlabel('Z', fontsize=15)
@@ -202,19 +198,19 @@ def _trim_and_filter(num_points, points_in_3d):
     zs = points_in_3d_np[:num_points, 2]
 
     # Trimming according to Z's
-    xs = xs[(zs < np.percentile(zs, 90)) & (zs > np.percentile(zs, 5))]
-    ys = ys[(zs < np.percentile(zs, 90)) & (zs > np.percentile(zs, 5))]
-    zs = zs[(zs < np.percentile(zs, 90)) & (zs > np.percentile(zs, 5))]
+    xs = xs[(zs < np.percentile(zs, 90)) & (zs > np.percentile(zs, 10))]
+    ys = ys[(zs < np.percentile(zs, 90)) & (zs > np.percentile(zs, 10))]
+    zs = zs[(zs < np.percentile(zs, 90)) & (zs > np.percentile(zs, 10))]
 
     # Trimming according to X's
-    ys = ys[(xs < np.percentile(xs, 90)) & (xs > np.percentile(xs, 5))]
-    zs = zs[(xs < np.percentile(xs, 90)) & (xs > np.percentile(xs, 5))]
-    xs = xs[(xs < np.percentile(xs, 90)) & (xs > np.percentile(xs, 5))]
+    ys = ys[(xs < np.percentile(xs, 90)) & (xs > np.percentile(xs, 10))]
+    zs = zs[(xs < np.percentile(xs, 90)) & (xs > np.percentile(xs, 10))]
+    xs = xs[(xs < np.percentile(xs, 90)) & (xs > np.percentile(xs, 10))]
 
     # Trimming according to Y's
-    zs = zs[(ys < np.percentile(ys, 90)) & (ys > np.percentile(ys, 5))]
-    xs = xs[(ys < np.percentile(ys, 90)) & (ys > np.percentile(ys, 5))]
-    ys = ys[(ys < np.percentile(ys, 90)) & (ys > np.percentile(ys, 5))]
+    zs = zs[(ys < np.percentile(ys, 90)) & (ys > np.percentile(ys, 10))]
+    xs = xs[(ys < np.percentile(ys, 90)) & (ys > np.percentile(ys, 10))]
+    ys = ys[(ys < np.percentile(ys, 90)) & (ys > np.percentile(ys, 10))]
 
     return xs, ys, zs
 

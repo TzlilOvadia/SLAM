@@ -102,6 +102,7 @@ def rectificatied_stereo_pattern(y1, y2, indices_mapping, thresh=1):
     img1out, img2out = indices_mapping[0, outliers_idx], indices_mapping[1, outliers_idx]
     return img1in, img2in, img1out, img2out, inlier_indices_mapping
 
+
 def array_to_dict(arr):
     """
     Convert a 2D numpy array to a dictionary.

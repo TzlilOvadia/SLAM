@@ -114,15 +114,14 @@ class Matcher:
          Apply a threshold to the matches to filter out poor matches and then call the drawMatchesKnn() function to
          display the matching features in a new image."""
         # BFMatcher with default params
-        with_significance_test = False
         if with_significance_test:
             matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=2)
-            matches = sorted(matches, key=lambda x: x[0].distance)
+            # matches = sorted(matches, key=lambda x: x[0].distance)
             self._matches = matches
-            # self.apply_threshold(debug)
+            self.apply_threshold(debug)
         else:
             matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=1)
-            matches = sorted(matches, key=lambda x: x[0].distance)
+            # matches = sorted(matches, key=lambda x: x[0].distance)
             self._matches = matches
         self.cache[self._file_index][MATCHES] = self._matches
 
@@ -159,6 +158,7 @@ class Matcher:
             if m.distance < threshold * n.distance:
                 filtered.append([m])
         return filtered
+
 
     def match_between_consecutive_frames(self, prev_frame_index, cur_frame_index, thresh=0.1, debug=False):
         """

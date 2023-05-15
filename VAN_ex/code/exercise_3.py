@@ -17,7 +17,6 @@ matcher = Matcher()
 ################# Constants #################
 #############################################
 KPS = 0
-MATCHES = 1
 DSC = 2
 HORIZONTAL_REPRESENTATION = 0
 VERTICAL_REPRESENTATION = 1
@@ -305,12 +304,11 @@ if __name__ == '__main__':
     cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k, m1, m2, matcher, file_index=1, debug=True)
     cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
     img_1_matches = matcher.get_matches(idx=1)
-
     # ------------------------------------------------Section 3.2-----------------------------------------------
 
     # Matching features between the two consecutive left images (left0 and left1)
     consecutive_matches = matcher.match_between_consecutive_frames(0, 1, thresh=0.4)
-
+    # draw_supporting_matches(1, matcher, consecutive_matches, np.arange(len(consecutive_matches)))
     # -----------------------------------------Section 3.3 + Section 3.4-----------------------------------------
 
     # Now that we have:
@@ -331,7 +329,7 @@ if __name__ == '__main__':
         Rt = solvePnP(kp1, first_4_consensus_matches, k, flags=cv2.SOLVEPNP_P3P)
         if Rt is None:
             continue
-        #plot_four_cameras(Rt, m2)  # plotting the positions of the camera in the 4 images (Section 3.3)
+        plot_four_cameras(Rt, m2)  # plotting the positions of the camera in the 4 images (Section 3.3)
         are_good_matches, num_good_matches = find_supporters(Rt, m2, consensus_matches, k, kp_left=kp1, kp_right=kp2, thresh=2, debug=True, file_index=1)
         draw_supporting_matches(1, matcher, filtered_matches, are_good_matches)  # (Section 3.4)
 
@@ -341,18 +339,24 @@ if __name__ == '__main__':
     Rt = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
                    debug=False, max_iterations=10)
     # plotting the point clouds for the first two frames
-    # draw_3d_points(prev_points_cloud, title=f"3d points from triangulation from image #0")
     # transforming the first point cloud according to the Rt we found
-    transformed_point_cloud = apply_Rt_transformation(prev_points_cloud, Rt)
+    prev_points_cloud = np.array(prev_points_cloud).T
+    cur_points_cloud = np.array(cur_points_cloud).T
 
+    prev_points_cloud = prev_points_cloud[:,prev_points_cloud[2] > 0]
+    cur_points_cloud = cur_points_cloud[:,cur_points_cloud[2] > 0]
+
+    transformed_point_cloud = apply_Rt_transformation(prev_points_cloud, Rt)
+    cur_points_cloud = cur_points_cloud.T.tolist()
+    prev_points_cloud = prev_points_cloud.T.tolist()
     draw_3d_points(transformed_point_cloud,
-                   title=f"3d points after transforming from image #0 [black] to image #1 [red]",
-                   other_points=prev_points_cloud, pov=DEFAULT_POV)
+                   title=f"3d points after transforming from image #0 [Blue] to image #1 [Red]",
+                   other_points=cur_points_cloud,pov=DEFAULT_POV)
     draw_3d_points(transformed_point_cloud,
-                   title=f"3d points after transforming from image #0 [black] to image #1 [red]",
-                   other_points=prev_points_cloud, num_points=np.inf, pov=SIDE_POV)
-    draw_3d_points(transformed_point_cloud, title=f"3d points after transforming from image #0 [black] to image #1 [red]",
-                   other_points=prev_points_cloud, num_points=np.inf, pov=TOP_POV)
+                   title=f"3d points after transforming from image #0 [Blue] to image #1 [Red]",
+                   other_points=cur_points_cloud, num_points=np.inf, pov=SIDE_POV)
+    draw_3d_points(transformed_point_cloud, title=f"3d points after transforming from image #0 [black] to image #1 [Red]",
+                   other_points=cur_points_cloud, num_points=np.inf, pov=TOP_POV)
 
     are_good_matches, num_good_matches = find_supporters(Rt, m2, consensus_matches, k, kp_left=kp1, kp_right=kp2,
                                                          thresh=2, debug=True, file_index=1)
