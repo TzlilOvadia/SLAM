@@ -1,4 +1,3 @@
-
 import random
 import cv2
 import numpy as np
@@ -8,12 +7,11 @@ from VAN_ex.code.exercise_2 import least_squares
 from models.Matcher import Matcher
 from models.TrackDatabase import TrackDatabase
 from utils import utils
-from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches,draw_matches, plot_four_cameras, draw_supporting_matches, plot_trajectories
+from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches, draw_matches, plot_four_cameras, \
+    draw_supporting_matches, plot_trajectories
 from utils.utils import rectificatied_stereo_pattern, coords_from_kps, array_to_dict, read_images
 from matplotlib import pyplot as plt
 from models.Constants import *
-
-
 
 
 def track_camera_for_many_images(thresh=0.4):
@@ -32,17 +30,24 @@ def track_camera_for_many_images(thresh=0.4):
     frameId = 0
     matcher.read_images(frameId)
     prev_inlier_indices_mapping = match_next_pair(frameId, matcher)
-    prev_points_cloud, prev_ind_to_3d_point_dict = get_3d_points_cloud(prev_inlier_indices_mapping, k, left_camera_extrinsic_mat, m2, matcher, file_index=frameId, debug=False)
+    prev_points_cloud, prev_ind_to_3d_point_dict = get_3d_points_cloud(prev_inlier_indices_mapping, k,
+                                                                       left_camera_extrinsic_mat, m2, matcher,
+                                                                       file_index=frameId, debug=False)
     prev_indices_mapping = array_to_dict(prev_inlier_indices_mapping)
 
     # Loop over all frames
     for frameId in tqdm(range(num_of_frames - 1)):
         cur_inlier_indices_mapping = match_next_pair(frameId + 1, matcher)
         cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
-        cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k, left_camera_extrinsic_mat, m2, matcher, file_index=frameId+1, debug=False)
-
+        cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k,
+                                                                         left_camera_extrinsic_mat, m2, matcher,
+                                                                         file_index=frameId + 1, debug=False)
         consecutive_matches = matcher.match_between_consecutive_frames(frameId, frameId + 1, thresh=thresh)
-        consensus_matches, filtered_matches = consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mapping, prev_ind_to_3d_point_dict, track_db,frameId, matcher)
+
+        # UPDATED: Note that the consensus_matche function is modified to work with the tracking DB mechanism (!)
+        consensus_matches, filtered_matches = consensus_match(consecutive_matches, prev_indices_mapping,
+                                                              cur_indices_mapping, prev_ind_to_3d_point_dict, track_db,
+                                                              frameId, matcher)
 
         kp1, kp2 = matcher.get_kp(idx=frameId + 1)
         Rt = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
@@ -51,16 +56,18 @@ def track_camera_for_many_images(thresh=0.4):
         new_R = R @ extrinsic_matrices[frameId][:, :-1]
         new_t = R @ extrinsic_matrices[frameId][:, -1] + t
         new_Rt = np.hstack((new_R, new_t[:, None]))
-        extrinsic_matrices[frameId+1] = new_Rt
-        camera_positions[frameId+1] = -new_R.T @ new_t
+        extrinsic_matrices[frameId + 1] = new_Rt
+        camera_positions[frameId + 1] = -new_R.T @ new_t
         prev_points_cloud, prev_ind_to_3d_point_dict = cur_points_cloud, cur_ind_to_3d_point_dict
         prev_indices_mapping = cur_indices_mapping
 
     return camera_positions, track_db
 
+
 def match_next_pair(cur_file, matcher):
     inlier_indices_mapping = find_stereo_matches(matcher, cur_file)
     return inlier_indices_mapping
+
 
 def find_stereo_matches(matcher, file_index):
     matcher.detect_and_compute(file_index)
@@ -69,9 +76,11 @@ def find_stereo_matches(matcher, file_index):
     kp1, kp2 = matcher.get_kp(file_index)
     x1, y1, x2, y2, indices_mapping = utils.coords_from_kps(matches, kp1, kp2)
     # Apply rectified stereo pattern on the matches
-    img1in, img2in, img1out, img2out, inlier_indices_mapping = rectificatied_stereo_pattern(y1, y2, indices_mapping, thresh=1)
+    img1in, img2in, img1out, img2out, inlier_indices_mapping = rectificatied_stereo_pattern(y1, y2, indices_mapping,
+                                                                                            thresh=1)
     matcher.filter_matches(img1in, file_index)
     return inlier_indices_mapping
+
 
 def get_3d_points_cloud(inlier_indices_mapping, k, m1, m2, matcher, file_index=0, debug=False):
     kp1, kp2 = matcher.get_kp(file_index)
@@ -99,19 +108,28 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
     :return:
     """
 
-    # prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind, point_3d_prev
+    # * Given prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind
+    # ** Consider the first iteration, i.e., the consensus match between the 0th and the 1st frames:
+    # **** FrameId is the 0 index (TODO: We should think about which of the two frames indices is more meaningful for this purpose)
+    # **** Every consensus match is assigned as a new track with length of 2.
+    # **** We start by appending the prev_left_ind, cur_left_ind to each track
+    # **** each track is composed by 3 elements: (kp_prev, feature_location_prev, frameId)
+    # **** In order to manage the bookkeeping of the tracks, we use a dictionary that is constructed as follows:
+    # **** A double dictionary to store last left_kps indices (Keys) and a matching trackId (Values)
+    # *********** [See _last_insertions in TrackDatabase]
 
-    # First iteration:
-    #  FrameId is the i index
-    #  Every consnsused match is assigned as a new track with length of 2.
-    #  We start by appending the prev_left_ind, cur_left_ind to each track
-    #  -->> [] is updated to [prev_left_ind, cur_left_ind]
-    # 2+ iterations
-    # Then, next frame we already have existing tracks in our db.
-    # So, any feature (refered as prev_left_ind) which is already belong to an existing track, should be
-    # identical to it's last item on the list and can be assigned by dictionary containing the last keys.
+    # **** Each matching between the pair of consecutive frames is keeping, where each kp used as a key, and the trackId
+    # **** is kept as its value, where the primary key is the frameId.
+    # **** Another thing we need to consider is that each time we insert new keypoint (calling add_track in other words)
+    # **** we update the _last_insertions for the next iteration by assigning the current left kp (cur_left_kp).
+    # **** on the i'th frameId, we update the _last_insertions[(i+1)%2], where _last_insertions is a dictionary of 2
+    # **** dictionaries we constantly update.
 
-    # prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind
+    # ** 2+ iterations
+    # **** Then, from this stage, we shall expect existing tracks in our db.
+    # **** So, for any feature (referred as prev_left_ind) which is already belong to an existing track, we should be
+    # **** able to find it in the _last_insertions[frameId][prev_left_ind], since on last iteration we inserted the
+    # **** corresponding keypoint - cur_left_kp to the _last_insertions[(i+1) % 2] dictionary.
 
     concensus_matces = []
     filtered_matches = []
@@ -132,8 +150,8 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
             if trackId is None:
                 trackId = track_db.generate_new_track_id()
 
-            xl,yl = matcher.get_feature_location_frame(frameId, kp=prev_left_kp, loc=LEFT)
-            xr,yr = matcher.get_feature_location_frame(frameId, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
+            xl, yl = matcher.get_feature_location_frame(frameId, kp=prev_left_kp, loc=LEFT)
+            xr, yr = matcher.get_feature_location_frame(frameId, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
 
             # xl_n,yl_n = matcher.get_feature_location_frame(frameId+1, kp=prev_left_kp, loc=LEFT)
             # xr_n,yr_n = matcher.get_feature_location_frame(frameId+1, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
@@ -152,8 +170,7 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
     return concensus_matces, filtered_matches
 
 
-
-def find_supporters(Rt, m2, consensus_matches, k, kp_left, kp_right, thresh=2, debug=True, file_index = 0):
+def find_supporters(Rt, m2, consensus_matches, k, kp_left, kp_right, thresh=2, debug=True, file_index=0):
     are_good_matches = np.zeros(len(consensus_matches))
     num_good_matches = 0
     for i, m in enumerate(consensus_matches):
@@ -177,7 +194,8 @@ def find_supporters(Rt, m2, consensus_matches, k, kp_left, kp_right, thresh=2, d
     return are_good_matches, num_good_matches
 
 
-def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, right_camera_matrix, thresh=2, debug=False, max_iterations=100):
+def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, right_camera_matrix, thresh=2,
+                   debug=False, max_iterations=100):
     num_points_for_model = 4
     best_num_of_supporters = 0
     best_candidate_supporters_boolean_array = []
@@ -185,14 +203,16 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
     I = max_iterations
     i = 0
     while i < I:
-    #for i in range(max_iterations):
+        # for i in range(max_iterations):
         candidate_4_points = random.sample(points_to_choose_from, k=num_points_for_model)
         candidate_Rt = solvePnP(kp_left, candidate_4_points, intrinsic_matrix, flags=cv2.SOLVEPNP_P3P)
         if candidate_Rt is None:
             i += 1
             continue
-        are_supporters_boolean_array, num_good_matches = find_supporters(candidate_Rt, right_camera_matrix, points_to_choose_from, intrinsic_matrix,
-                                              kp_left=kp_left, kp_right=kp_right, thresh=thresh, debug=debug)
+        are_supporters_boolean_array, num_good_matches = find_supporters(candidate_Rt, right_camera_matrix,
+                                                                         points_to_choose_from, intrinsic_matrix,
+                                                                         kp_left=kp_left, kp_right=kp_right,
+                                                                         thresh=thresh, debug=debug)
 
         if num_good_matches >= best_num_of_supporters:
             best_4_points_candidate = candidate_4_points
@@ -204,13 +224,14 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
         print(f"at iteration {i} I={I}")
         i += 1
     # We now refine the winner by calculating a transformation for all the supporters/inliers
-    supporters = [point_to_choose for ind, point_to_choose in enumerate(points_to_choose_from) if best_candidate_supporters_boolean_array[ind]]
+    supporters = [point_to_choose for ind, point_to_choose in enumerate(points_to_choose_from) if
+                  best_candidate_supporters_boolean_array[ind]]
     refined_Rt = solvePnP(kp_left, supporters, intrinsic_matrix, flags=0)
     if refined_Rt is None:
         refined_Rt = best_Rt_candidate
     _, num_good_matches = find_supporters(refined_Rt, right_camera_matrix, points_to_choose_from, intrinsic_matrix,
-                                                                     kp_left=kp_left, kp_right=kp_right, thresh=thresh,
-                                                                     debug=debug)
+                                          kp_left=kp_left, kp_right=kp_right, thresh=thresh,
+                                          debug=debug)
     if num_good_matches >= best_num_of_supporters:
         best_Rt_candidate = refined_Rt
         print(f"after refinement: {num_good_matches} supporters")
@@ -218,7 +239,7 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
 
 
 def apply_Rt_transformation(list_of_3d_points, Rt):
-    points_3d_arr = np.array(list_of_3d_points).reshape(3,-1)
+    points_3d_arr = np.array(list_of_3d_points).reshape(3, -1)
     points_3d_arr_hom = np.vstack((points_3d_arr, np.ones(points_3d_arr.shape[1])))
     transformed_points = Rt @ points_3d_arr_hom
     list_of_transformed_points = transformed_points.T.tolist()
@@ -228,7 +249,7 @@ def apply_Rt_transformation(list_of_3d_points, Rt):
 def ransac_num_of_iterations(epsilon=0.001, p=0.999, s=4):
     if epsilon == 0:
         return 0
-    return int(np.ceil(np.log(1-p) / np.log(1 - (1 - epsilon) ** s)))
+    return int(np.ceil(np.log(1 - p) / np.log(1 - (1 - epsilon) ** s)))
 
 
 def solvePnP(kp, corresponding_points, camera_intrinsic, flags=0):
@@ -243,10 +264,10 @@ def solvePnP(kp, corresponding_points, camera_intrinsic, flags=0):
 
 
 def rodriguez_to_mat(rvec, tvec):
-  rot, _ = cv2.Rodrigues(rvec)
-  return np.hstack((rot, tvec))
+    rot, _ = cv2.Rodrigues(rvec)
+    return np.hstack((rot, tvec))
+
 
 if __name__ == "__main__":
     # Create an instance of TrackDatabase
     camera_positions, track_db = track_camera_for_many_images()
-
