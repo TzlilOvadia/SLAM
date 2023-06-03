@@ -1,13 +1,16 @@
 import os
 import cv2
 import numpy as np
-
+import time
+import tqdm
 MAC_OS_PATH = "../dataset/sequences/05/"
 WINDOWS_OS_PATH = "../dataset/sequences/05\\"
 SEP = "\\" if os.name == 'nt' else "/"
 DATA_PATH = WINDOWS_OS_PATH if os.name == 'nt' else MAC_OS_PATH
 
 WINDOWS_GT_PATH = "../dataset/poses/05.txt"
+
+
 
 def read_images(idx) -> (np.ndarray, np.ndarray):
     """
@@ -102,6 +105,44 @@ def rectificatied_stereo_pattern(y1, y2, indices_mapping, thresh=1):
     img1out, img2out = indices_mapping[0, outliers_idx], indices_mapping[1, outliers_idx]
     return img1in, img2in, img1out, img2out, inlier_indices_mapping
 
+
+def track_camera_for_many_images(thresh=0.4):
+    k, m1, m2 = utils.read_cameras()
+    matcher = Matcher(display=VERTICAL_REPRESENTATION)
+    num_of_frames = 2560
+    extrinsic_matrices = np.zeros(shape=(num_of_frames, 3, 4))
+    camera_positions = np.zeros(shape=(num_of_frames, 3))
+    left_camera_extrinsic_mat = m1
+    extrinsic_matrices[0] = left_camera_extrinsic_mat
+    # initialization
+    i = 0
+    matcher.read_images(i)
+    prev_inlier_indices_mapping = match_next_pair(i, matcher)
+    prev_points_cloud, prev_ind_to_3d_point_dict = get_3d_points_cloud(prev_inlier_indices_mapping, k, left_camera_extrinsic_mat, m2, matcher, file_index=i, debug=False)
+    prev_indices_mapping = array_to_dict(prev_inlier_indices_mapping)
+    # loop over all frames
+    for i in tqdm.tqdm.range(num_of_frames - 1):
+        cur_inlier_indices_mapping = match_next_pair(i + 1, matcher)
+        cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
+        cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k, left_camera_extrinsic_mat, m2, matcher, file_index=i+1, debug=False)
+
+        consecutive_matches = matcher.match_between_consecutive_frames(i, i + 1, thresh=thresh)
+        consensus_matches, filtered_matches = consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mapping, prev_ind_to_3d_point_dict)
+
+        kp1, kp2 = matcher.get_kp(idx=i + 1)
+        Rt = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
+                            debug=False, max_iterations=500)
+        R, t = Rt[:, :-1], Rt[:, -1]
+        new_R = R @ extrinsic_matrices[i][:, :-1]
+        new_t = R @ extrinsic_matrices[i][:, -1] + t
+        new_Rt = np.hstack((new_R, new_t[:, None]))
+        extrinsic_matrices[i+1] = new_Rt
+        camera_positions[i+1] = -new_R.T @ new_t
+
+        prev_points_cloud, prev_ind_to_3d_point_dict = cur_points_cloud, cur_ind_to_3d_point_dict
+        prev_indices_mapping = cur_indices_mapping
+
+    return camera_positions
 
 def array_to_dict(arr):
     """

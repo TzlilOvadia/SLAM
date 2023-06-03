@@ -95,7 +95,7 @@ def get_3d_points_cloud_orig(matcher, file_index=0, debug=False):
     - inlier_points_in_3d (list): A list of inlier 3D points in the rectified stereo system.
     """
     matcher.detect_and_compute(file_index)
-    matcher.find_matching_features(with_significance_test=False)
+    matcher.אפfind_matching_features(with_significance_test=False)
     matches = matcher.get_matches()
     kp1, kp2 = matcher.get_kp()
     x1, y1, x2, y2, indices_mapping = utils.coords_from_kps(matches, kp1, kp2)

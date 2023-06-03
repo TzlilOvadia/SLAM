@@ -1,18 +1,13 @@
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-import random
+
+from models.Constants import *
+from models.TrackDatabase import TrackDatabase
+
 from utils.utils import read_images
 from utils.plotters import draw_matches
 # noinspection PyUnresolvedReferences
-MATCHES = 2
-LEFT = 0
-RIGHT = 1
-CONSECUTIVE = 3
-FRAMES = 4
-
-HORIZONTAL_REPRESENTATION = 0
-VERTICAL_REPRESENTATION = 1
 
 class Matcher:
     """A class for matching features between two images using a specified algorithm and matcher."""
@@ -64,8 +59,14 @@ class Matcher:
             return self._img1_kp, self._img2_kp
         return self.cache[idx][LEFT][0], self.cache[idx][RIGHT][0]
 
+    def get_feature_location_frame(self, frameId: int, kp: int, loc: int):
+        kpi = self.get_kp(frameId)[loc]
+        x, y = kpi[kp].pt
+        return x, y
+
+
     def get_dsc(self):
-        return self._img1_dsc,self._img2_dsc
+        return self._img1_dsc, self._img2_dsc
 
     def get_images(self, file_index=0):
         if file_index in self.cache:
@@ -109,20 +110,20 @@ class Matcher:
 
 
 
-    def find_matching_features(self, with_significance_test=False, debug=False, idx=0):
+    def find_matching_features(self, with_significance_test=False, debug=False):
         """Find matching features between the img1 and img2 images using the matcher specified in the constructor.
          Apply a threshold to the matches to filter out poor matches and then call the drawMatchesKnn() function to
          display the matching features in a new image."""
         # BFMatcher with default params
         if with_significance_test:
             matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=2)
-            # matches = sorted(matches, key=lambda x: x[0].distance)
             self._matches = matches
             self.apply_threshold(debug)
+
         else:
             matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=1)
-            # matches = sorted(matches, key=lambda x: x[0].distance)
             self._matches = matches
+
         self.cache[self._file_index][MATCHES] = self._matches
 
 
