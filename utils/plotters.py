@@ -269,3 +269,91 @@ def plot_four_cameras(Rt, m2):
     plt.legend()
     plt.show()
     a=5
+
+
+def plot_regions_around_matching_pixels(left, right, x1, y1, x2, y2):
+    left, right = left.copy(), right.copy()
+    region_size = 100
+    left_height, left_width = left.shape
+    right_height, right_width = right.shape
+
+    x1_min, x1_max = max(0, x1 - region_size // 2), min(left_width, x1 + region_size // 2)
+    y1_min, y1_max = max(0, y1 - region_size // 2), min(left_height, y1 + region_size // 2)
+
+    x2_min, x2_max = max(0, x2 - region_size // 2), min(right_width, x2 + region_size // 2)
+    y2_min, y2_max = max(0, y2 - region_size // 2), min(right_height, y2 + region_size // 2)
+
+    # Extract the regions of interest from both left and right images
+    left_region = left[y1_min:y1_max, x1_min:x1_max]
+    right_region = right[y2_min:y2_max, x2_min:x2_max]
+
+    # Calculate the relative coordinates within the regions
+    x1_rel = x1 - x1_min
+    y1_rel = y1 - y1_min
+    x2_rel = x2 - x2_min
+    y2_rel = y2 - y2_min
+
+    # Mark the feature as a dot in both regions
+    dot_size = 3
+    left_x_min = max(0, x1_rel - dot_size + 1)
+    left_x_max = min(region_size, x1_rel + dot_size)
+    left_y_min = max(0, y1_rel - dot_size + 1)
+    left_y_max = min(region_size, y1_rel + dot_size)
+    left_region[left_y_min:left_y_max, left_x_min:left_x_max] = 0
+
+    right_x_min = max(0, x2_rel - dot_size + 1)
+    right_x_max = min(region_size, x2_rel + dot_size)
+    right_y_min = max(0, y2_rel - dot_size + 1)
+    right_y_max = min(region_size, y2_rel + dot_size)
+    right_region[right_y_min:right_y_max, right_x_min:right_x_max] = 0
+
+    # Create a figure with two subplots for left and right regions
+    fig, axes = plt.subplots(1, 2, figsize=(4, 5))
+
+    # Plot the left region
+    axes[0].imshow(left_region, cmap='gray')
+    axes[0].set_title('Left Region')
+
+    # Plot the right region
+    axes[1].imshow(right_region, cmap='gray')
+    axes[1].set_title('Right Region')
+
+    # Adjust the spacing between subplots
+    fig.tight_layout()
+
+    # Display the plot
+    plt.show()
+
+
+def plot_dict(d, x_title='', y_title='', title=''):
+    x = []
+    y = []
+    for k, v in d.items():
+        x.append(k)
+        y.append(v)
+    plt.figure()
+    plt.plot(x, y)
+    plt.xlabel(x_title)
+    plt.ylabel(y_title)
+    plt.title(title)
+    plt.show()
+
+
+def plot_connectivity_graph(frame_num, outgoing_tracks):
+    plt.figure()
+    plt.plot(frame_num, outgoing_tracks)
+    plt.xlabel("frame")
+    plt.ylabel("outgoing tracks")
+    plt.title("Connectivity")
+    plt.show()
+
+
+def plot_reprojection_errors(frame_ids, left_errors, right_errors):
+    plt.figure()
+    plt.plot(frame_ids, left_errors, label='left images error')
+    plt.plot(frame_ids, right_errors, label='right images error')
+    plt.xlabel("frame id")
+    plt.ylabel("reprojection error")
+    plt.title("reprojection error per image")
+    plt.legend()
+    plt.show()
