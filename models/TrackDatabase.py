@@ -2,7 +2,7 @@ import numpy as np
 from utils.utils import read_images
 import pickle
 import random
-import Constants
+import models.Constants as Constants
 # noinspection PyCompatibility
 FEATURES = 1
 EVEN = 0
@@ -49,7 +49,7 @@ class TrackDatabase:
 
     def add_inliers_ratio(self, frame_id, ratio):
         assert frame_id in self._frame_ids
-        self._frame_id_to_inliers_ratio = ratio
+        self._frame_id_to_inliers_ratio[frame_id] = ratio
 
     def get_inliers_ratio_per_frame(self):
         return self._frame_id_to_inliers_ratio

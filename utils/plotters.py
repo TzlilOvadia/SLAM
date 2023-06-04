@@ -271,8 +271,12 @@ def plot_four_cameras(Rt, m2):
     a=5
 
 
-def plot_regions_around_matching_pixels(left, right, x1, y1, x2, y2):
+def plot_regions_around_matching_pixels(left, right, x1, y1, x2, y2, frame_index):
     left, right = left.copy(), right.copy()
+    x1 = int(x1)
+    y1 = int(y1)
+    x2 = int(x2)
+    y2 = int(y2)
     region_size = 100
     left_height, left_width = left.shape
     right_height, right_width = right.shape
@@ -312,15 +316,14 @@ def plot_regions_around_matching_pixels(left, right, x1, y1, x2, y2):
 
     # Plot the left region
     axes[0].imshow(left_region, cmap='gray')
-    axes[0].set_title('Left Region')
+    axes[0].set_title(f'Left Region ({frame_index})')
 
     # Plot the right region
     axes[1].imshow(right_region, cmap='gray')
-    axes[1].set_title('Right Region')
+    axes[1].set_title(f'Right Region ({frame_index})')
 
     # Adjust the spacing between subplots
     fig.tight_layout()
-
     # Display the plot
     plt.show()
 

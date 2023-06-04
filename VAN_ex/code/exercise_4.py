@@ -318,7 +318,7 @@ def q3(path, num_to_show=10):
         _, feature_location, frameId = track_point
         x_l, x_r, y = feature_location
         left_image, right_image = read_images(frameId)
-        plot_regions_around_matching_pixels(left_image, right_image, x_l, y, x_r, y)
+        plot_regions_around_matching_pixels(left_image, right_image, x_l, y, x_r, y, frame_index=frameId)
 
 
 def q4(path):
@@ -346,7 +346,7 @@ def q6(path):
     track_db = TrackDatabase(path_to_pkl_file=path_to_track_db_file)
     print(f"Getting the Track Length Data and Plotting it...")
     track_lengths = track_db.get_track_length_data()
-    gen_hist(track_lengths, bins='auto', title="Track Length Histogram", x="Track Length", y="Track #")
+    gen_hist(track_lengths, bins=len(np.unique(track_lengths)), title="Track Length Histogram", x="Track Length", y="Track #")
 
 
 def q7(path):
@@ -364,7 +364,8 @@ def q7(path):
     p1 = last_track_point_feature_location[0], last_track_point_feature_location[2]
     p2 = last_track_point_feature_location[1], last_track_point_feature_location[2]
     Pmat = gt_extrinsic_matrices[last_track_point_frameId]
-    Qmat = m2 @ Pmat
+    Qmat = Pmat.copy()
+    Qmat[:, -1] = Qmat[:, -1] + m2[:, -1]
     triangulated_3d_point = least_squares(p1, p2, k @ Pmat, k @ Qmat)
     print(f"Triangulated Point is:\n {triangulated_3d_point}")
 
@@ -382,7 +383,8 @@ def q7(path):
 
         # Projected locations on images
         current_left_extrinsic_matrix = gt_extrinsic_matrices[frameId]
-        current_right_extrinsic_matrix = m2 @ current_left_extrinsic_matrix
+        current_right_extrinsic_matrix = current_left_extrinsic_matrix.copy()
+        current_right_extrinsic_matrix[:, -1] = current_right_extrinsic_matrix[:, -1] + m2[:, -1]
         projected_point_on_left = project_point_on_image(triangulated_3d_point, current_left_extrinsic_matrix, k)
         projected_point_on_right = project_point_on_image(triangulated_3d_point, current_right_extrinsic_matrix, k)
 
