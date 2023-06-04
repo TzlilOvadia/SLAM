@@ -400,7 +400,7 @@ def q7(path):
 
 
 if __name__ == "__main__":
-    PATH_TO_SAVE_TRACKER_FILE = "C:\\Users\\Shlomi\Dropbox\\HUJI\\test_pkl"
+    PATH_TO_SAVE_TRACKER_FILE = "C:\\Users\\Shlomi\Dropbox\\HUJI\\test_pkl" # TODO ADD PICKLE FILE TO GIT AND MAKE PATH OS GENERIC
     track_db = TrackDatabase()
     deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
     if deserialization_result == FAILURE:
@@ -413,3 +413,8 @@ if __name__ == "__main__":
     q5(PATH_TO_SAVE_TRACKER_FILE)
     q6(PATH_TO_SAVE_TRACKER_FILE)
     q7(PATH_TO_SAVE_TRACKER_FILE)
+
+
+    # TODO: A) create pdf with answers... we didn't answer 7b yet B) Change the counting method for track lengths.
+    # TODO C)  ADD PICKLE FILE TO GIT AND MAKE PATH OS GENERIC D) make the plots of matched feature points prettier.
+    # TODO E) Check if the 107 length track is an indication for a problem in our code
