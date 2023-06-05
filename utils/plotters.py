@@ -351,12 +351,12 @@ def plot_connectivity_graph(frame_num, outgoing_tracks):
     plt.show()
 
 
-def plot_reprojection_errors(frame_ids, left_errors, right_errors):
+def plot_reprojection_errors(frame_ids, left_errors, right_errors, frame):
     plt.figure()
     plt.plot(frame_ids, left_errors, label='left images error')
     plt.plot(frame_ids, right_errors, label='right images error')
     plt.xlabel("frame id")
     plt.ylabel("reprojection error")
-    plt.title("reprojection error per image")
+    plt.title(f"reprojection error per image, triangulated from {frame} frame")
     plt.legend()
     plt.show()

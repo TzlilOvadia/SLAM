@@ -23,21 +23,22 @@ class TrackDatabase:
         self._max_length = 0
         self._min_length = np.inf
         self._mean_frame_links = 0
-        self._num_non_trivial_tracks = 0
-        self._non_trivial_tracks_ids = set()
         self._frame_id_to_inliers_ratio = {}
 
-
-    def add_track(self, trackId, frameId, feature_location_prev, kp_prev, kp_cur):
+    def add_track(self, trackId, frameId, feature_location_prev, feature_location_cur, kp_prev, kp_cur):
         prev_feature = (kp_prev, feature_location_prev, frameId)
+        cur_feature = (kp_cur, feature_location_cur, frameId + 1)
 
         try:
-            self._tracks[trackId].append(prev_feature)
-            if len(self._tracks[trackId]) == 2:
-                self._num_non_trivial_tracks += 1
-                self._non_trivial_tracks_ids.add(trackId)
+
+            # We add a later feature among the two features, since we inserted both the previous and the current
+            # features on the track setup stage. Thus, we shall add the current feature for sake of consistency.
+            self._tracks[trackId].append(cur_feature)
+
         except KeyError:
-            self._tracks[trackId] = [prev_feature]
+            # On the setup of a new track, we add the
+            self._tracks[trackId] = [prev_feature, cur_feature]
+            self._frame_ids[frameId + 1].add(trackId)
             self._num_tracks += 1
 
         finally:
@@ -98,8 +99,6 @@ class TrackDatabase:
             'max_length': self._max_length,
             'min_length': self._min_length,
             'mean_frame_links': self._mean_frame_links,
-            'num_non_trivial_tracks': self._num_non_trivial_tracks,
-            'non_trivial_tracks_ids': self._non_trivial_tracks_ids,
             'frame_id_to_inliers_ratio': self._frame_id_to_inliers_ratio
         }
         with open(file_path, 'wb') as f:
@@ -119,8 +118,6 @@ class TrackDatabase:
                 self._max_length = data['max_length']
                 self._min_length = data['min_length']
                 self._mean_frame_links = data['mean_frame_links']
-                self._num_non_trivial_tracks = data['num_non_trivial_tracks']
-                self._non_trivial_tracks_ids = data['non_trivial_tracks_ids']
                 self._frame_id_to_inliers_ratio = data['frame_id_to_inliers_ratio']
             return Constants.SUCCESS
         except Exception:
@@ -139,26 +136,21 @@ class TrackDatabase:
 
     def prepare_to_next_pair(self, frameId):
         self._frame_ids[frameId] = set()
+        self._frame_ids[frameId + 1] = set()
         self._last_insertions[(frameId + 1) % 2] = {}
 
-    def get_num_tracks(self, include_trivial_tracks=False):
-        if include_trivial_tracks:
-            return self._num_tracks
-        num_non_trivial_tracks = 0
-        for trackId, track in self._tracks.items():
-            if len(track) > 1:
-                num_non_trivial_tracks += 1
-        return num_non_trivial_tracks
+    def get_num_tracks(self):
+        return self._num_tracks
 
-    def get_num_frames(self, include_trivial_tracks=False):
+    def get_num_frames(self):
         return self._num_frames
 
-    def get_mean_track_length(self, include_trivial_tracks=False):
+    def get_mean_track_length(self):
         result = 0
-        tracks_to_iterate_on = self._tracks.keys() if include_trivial_tracks else self._non_trivial_tracks_ids
+        tracks_to_iterate_on = self._tracks.keys()
         for key in tracks_to_iterate_on:
             result += len(self._tracks[key])
-        total_num_of_tracks = self._num_tracks if include_trivial_tracks else self._num_non_trivial_tracks
+        total_num_of_tracks = self._num_tracks
         try:
             self._mean_track_length = result / total_num_of_tracks
             return self._mean_track_length
@@ -171,17 +163,11 @@ class TrackDatabase:
     def get_min_track(self):
         return self._min_length
 
-    def get_mean_frame_links(self, include_trivial_tracks=False):
+    def get_mean_frame_links(self):
         result = 0
-
         for key in self._frame_ids.keys():
-            if include_trivial_tracks:
-                result += len(self._frame_ids[key])
-            else:
-                track_ids_in_frame = self._frame_ids[key]
-                for track_id in track_ids_in_frame:
-                    if track_id in self._non_trivial_tracks_ids:
-                        result += 1
+            result += len(self._frame_ids[key])
+
         try:
             self._mean_frame_links = result / self._num_frames
             return self._mean_frame_links
@@ -212,5 +198,5 @@ class TrackDatabase:
         return x, y
 
     def get_track_length_data(self):
-        track_lengths = [len(self._tracks[trackId]) for trackId in self._non_trivial_tracks_ids]
+        track_lengths = [len(self._tracks[trackId]) for trackId in self._tracks.keys()]
         return np.array(track_lengths)

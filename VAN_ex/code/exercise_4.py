@@ -154,12 +154,13 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
             xl, yl = matcher.get_feature_location_frame(frameId, kp=prev_left_kp, loc=LEFT)
             xr, yr = matcher.get_feature_location_frame(frameId, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
 
-            # xl_n,yl_n = matcher.get_feature_location_frame(frameId+1, kp=prev_left_kp, loc=LEFT)
-            # xr_n,yr_n = matcher.get_feature_location_frame(frameId+1, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
-            feature_location_prev = (xl, xr, yl)
-            # feature_location_cur = (xl_n, xr_n, yl_n)
+            xl_n,yl_n = matcher.get_feature_location_frame(frameId+1, kp=cur_left_kp, loc=LEFT)
+            xr_n,yr_n = matcher.get_feature_location_frame(frameId+1, kp=cur_indices_mapping[cur_left_kp], loc=RIGHT)
 
-            track_db.add_track(trackId, frameId, feature_location_prev, prev_left_kp, cur_left_kp)
+            feature_location_prev = (xl, xr, yl)
+            feature_location_cur = (xl_n, xr_n, yl_n)
+
+            track_db.add_track(trackId, frameId, feature_location_prev, feature_location_cur, prev_left_kp, cur_left_kp)
 
             prev_left_ind = prev_left_kp
             prev_right_ind = prev_indices_mapping[prev_left_kp]
@@ -277,6 +278,14 @@ def project_point_on_image(point_3d, extrinsic_matrix, intrinsic_matrix):
     return projected_point
 
 
+def visualize_track(track, num_to_show=10):
+    first_frames_of_track = track[:num_to_show]
+    for i, track_point in enumerate(first_frames_of_track):
+        _, feature_location, frameId = track_point
+        x_l, x_r, y = feature_location
+        left_image, right_image = read_images(frameId)
+        plot_regions_around_matching_pixels(left_image, right_image, x_l, y, x_r, y, frame_index=frameId)
+
 # ------------------------------------------ANSWERS TO EXERCISE QUESTIONS ---------------------------------------
 
 def q1(path):
@@ -307,18 +316,13 @@ def q3(path, num_to_show=10):
     print("------------------------------------Q3-------------------------------------")
     path_to_track_db_file = path
     track_db = TrackDatabase(path_to_pkl_file=path_to_track_db_file)
-    length = 10
+    length = num_to_show
     long_track = track_db.get_random_track_of_length(length=length)
     if long_track is None:
         print(f"No track of length at least {length} in data base!")
         return
     print(f"Sampled a track of length {len(long_track)}! \n Preparing to visualize tracking for {length} images...")
-    first_frames_of_track = long_track[:num_to_show]
-    for i, track_point in enumerate(first_frames_of_track):
-        _, feature_location, frameId = track_point
-        x_l, x_r, y = feature_location
-        left_image, right_image = read_images(frameId)
-        plot_regions_around_matching_pixels(left_image, right_image, x_l, y, x_r, y, frame_index=frameId)
+    visualize_track(long_track, num_to_show=num_to_show)
 
 
 def q4(path):
@@ -349,58 +353,59 @@ def q6(path):
     gen_hist(track_lengths, bins=len(np.unique(track_lengths)), title="Track Length Histogram", x="Track Length", y="Track #")
 
 
-def q7(path):
+def q7(path, length=10):
     print("------------------------------------Q7-------------------------------------")
     path_to_track_db_file = path
     k, m1, m2 = utils.read_cameras()
     track_db = TrackDatabase(path_to_pkl_file=path_to_track_db_file)
-    length = 10
     print(f"Looking for a Random Track of length at least {length}...")
     long_track = track_db.get_random_track_of_length(length=length)
     print(f"Found a Track of length {len(long_track)}...")
-    print(f"Triangulating Feature Point from the Last Frame of the Path According to GT Camera Matrices...")
+    print(f"Triangulating Feature Point from the Last/First Frame of the Path According to GT Camera Matrices...")
     gt_extrinsic_matrices = utils.read_gt()
-    last_track_point_feature_location, last_track_point_frameId = long_track[-1][1], long_track[-1][2]
-    p1 = last_track_point_feature_location[0], last_track_point_feature_location[2]
-    p2 = last_track_point_feature_location[1], last_track_point_feature_location[2]
-    Pmat = gt_extrinsic_matrices[last_track_point_frameId]
-    Qmat = Pmat.copy()
-    Qmat[:, -1] = Qmat[:, -1] + m2[:, -1]
-    triangulated_3d_point = least_squares(p1, p2, k @ Pmat, k @ Qmat)
-    print(f"Triangulated Point is:\n {triangulated_3d_point}")
+    for frame, ind in {'last': -1, 'first': 0}.items():
+        track_point_feature_location, track_point_frameId = long_track[ind][1], long_track[ind][2]
+        p1 = track_point_feature_location[0], track_point_feature_location[2]
+        p2 = track_point_feature_location[1], track_point_feature_location[2]
+        Pmat = gt_extrinsic_matrices[track_point_frameId]
+        Qmat = Pmat.copy()
+        Qmat[:, -1] = Qmat[:, -1] + m2[:, -1]
+        triangulated_3d_point = least_squares(p1, p2, k @ Pmat, k @ Qmat)
+        print(f"Triangulated Point is:\n {triangulated_3d_point}")
 
-    frame_ids = []
-    left_errors = []
-    right_errors = []
-    print(f"Calculating the ReProjection Error for each Frames on The Track...")
-    for i, track_point in enumerate(long_track):
+        frame_ids = []
+        left_errors = []
+        right_errors = []
+        print(f"Calculating the ReProjection Error for each Frames on The Track...")
+        for i, track_point in enumerate(long_track):
 
-        # Feature locations on images
-        _, feature_location, frameId = track_point
-        x_l, x_r, y = feature_location
-        tracked_feature_location_left = np.array([x_l, y])
-        tracked_feature_location_right = np.array([x_r, y])
+            # Feature locations on images
+            _, feature_location, frameId = track_point
+            x_l, x_r, y = feature_location
+            tracked_feature_location_left = np.array([x_l, y])
+            tracked_feature_location_right = np.array([x_r, y])
 
-        # Projected locations on images
-        current_left_extrinsic_matrix = gt_extrinsic_matrices[frameId]
-        current_right_extrinsic_matrix = current_left_extrinsic_matrix.copy()
-        current_right_extrinsic_matrix[:, -1] = current_right_extrinsic_matrix[:, -1] + m2[:, -1]
-        projected_point_on_left = project_point_on_image(triangulated_3d_point, current_left_extrinsic_matrix, k)
-        projected_point_on_right = project_point_on_image(triangulated_3d_point, current_right_extrinsic_matrix, k)
+            # Projected locations on images
+            current_left_extrinsic_matrix = gt_extrinsic_matrices[frameId]
+            current_right_extrinsic_matrix = current_left_extrinsic_matrix.copy()
+            current_right_extrinsic_matrix[:, -1] = current_right_extrinsic_matrix[:, -1] + m2[:, -1]
+            projected_point_on_left = project_point_on_image(triangulated_3d_point, current_left_extrinsic_matrix, k)
+            projected_point_on_right = project_point_on_image(triangulated_3d_point, current_right_extrinsic_matrix, k)
 
-        # calculating reprojection errors
-        reprojection_error_left = np.linalg.norm(tracked_feature_location_left - projected_point_on_left)
-        reprojection_error_right = np.linalg.norm(tracked_feature_location_right - projected_point_on_right)
-        frame_ids.append(frameId)
-        left_errors.append(reprojection_error_left)
-        right_errors.append(reprojection_error_right)
+            # calculating reprojection errors
+            reprojection_error_left = np.linalg.norm(tracked_feature_location_left - projected_point_on_left)
+            reprojection_error_right = np.linalg.norm(tracked_feature_location_right - projected_point_on_right)
+            frame_ids.append(frameId)
+            left_errors.append(reprojection_error_left)
+            right_errors.append(reprojection_error_right)
 
-    print(f"Plotting the ReProjection Errors...")
-    plot_reprojection_errors(frame_ids, left_errors, right_errors)
+        print(f"Plotting the ReProjection Errors...")
+        plot_reprojection_errors(frame_ids, left_errors, right_errors, frame)
+    a=5
 
 
 if __name__ == "__main__":
-    PATH_TO_SAVE_TRACKER_FILE = "C:\\Users\\Shlomi\Dropbox\\HUJI\\test_pkl" # TODO ADD PICKLE FILE TO GIT AND MAKE PATH OS GENERIC
+    PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
     track_db = TrackDatabase()
     deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
     if deserialization_result == FAILURE:
@@ -412,9 +417,4 @@ if __name__ == "__main__":
     q4(PATH_TO_SAVE_TRACKER_FILE)
     q5(PATH_TO_SAVE_TRACKER_FILE)
     q6(PATH_TO_SAVE_TRACKER_FILE)
-    q7(PATH_TO_SAVE_TRACKER_FILE)
-
-
-    # TODO: A) create pdf with answers... we didn't answer 7b yet B) Change the counting method for track lengths.
-    # TODO C)  ADD PICKLE FILE TO GIT AND MAKE PATH OS GENERIC D) make the plots of matched feature points prettier.
-    # TODO E) Check if the 107 length track is an indication for a problem in our code
+    q7(PATH_TO_SAVE_TRACKER_FILE, length=10)
