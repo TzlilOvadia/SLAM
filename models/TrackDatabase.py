@@ -38,11 +38,11 @@ class TrackDatabase:
         except KeyError:
             # On the setup of a new track, we add the
             self._tracks[trackId] = [prev_feature, cur_feature]
-            self._frame_ids[frameId + 1].add(trackId)
+            self._frame_ids[frameId].add(trackId)
             self._num_tracks += 1
 
         finally:
-            self._frame_ids[frameId].add(trackId)
+            self._frame_ids[frameId+1].add(trackId)
             self._last_insertions[(frameId + 1) % 2][kp_cur] = trackId
             self._num_frames = len(self._frame_ids.keys())
             self._max_length = max(self._max_length, len(self._tracks[trackId]))
@@ -82,10 +82,7 @@ class TrackDatabase:
                     return track_point[1]
         else:
             return None
-    #
-    # def extend_database(self, frameId, matches):
-    #     for track_id, feature_location in matches.items():
-    #         self.add_track(track_id, frameId, feature_location)
+
 
     def serialize(self, file_path):
         data = {
@@ -135,7 +132,11 @@ class TrackDatabase:
             return
 
     def prepare_to_next_pair(self, frameId):
-        self._frame_ids[frameId] = set()
+        try:
+            _ = self._frame_ids[frameId]
+        except KeyError:
+            self._frame_ids[frameId] = set()
+
         self._frame_ids[frameId + 1] = set()
         self._last_insertions[(frameId + 1) % 2] = {}
 

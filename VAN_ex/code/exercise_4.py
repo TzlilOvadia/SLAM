@@ -36,7 +36,7 @@ def track_camera_for_many_images(thresh=0.4):
     prev_indices_mapping = array_to_dict(prev_inlier_indices_mapping)
 
     # Loop over all frames
-    for frameId in tqdm(range(num_of_frames - 1)):
+    for frameId in tqdm(range(num_of_frames-1)):
         cur_inlier_indices_mapping = match_next_pair(frameId + 1, matcher)
         cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
         cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k,
@@ -137,6 +137,7 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
     track_db.prepare_to_next_pair(frameId)
 
     for idx, matches_list in enumerate(consecutive_matches):
+
         m = matches_list[0]
         prev_left_kp = m.queryIdx
         cur_left_kp = m.trainIdx
