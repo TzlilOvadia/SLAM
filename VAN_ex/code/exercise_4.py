@@ -53,6 +53,7 @@ def track_camera_for_many_images(thresh=0.4):
         Rt, inliers_ratio = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
                             debug=False, max_iterations=500)
         track_db.add_inliers_ratio(frameId, inliers_ratio)
+        track_db.add_inliers_ratio(frameId, Rt)
         R, t = Rt[:, :-1], Rt[:, -1]
         new_R = R @ extrinsic_matrices[frameId][:, :-1]
         new_t = R @ extrinsic_matrices[frameId][:, -1] + t
@@ -61,6 +62,8 @@ def track_camera_for_many_images(thresh=0.4):
         camera_positions[frameId + 1] = -new_R.T @ new_t
         prev_points_cloud, prev_ind_to_3d_point_dict = cur_points_cloud, cur_ind_to_3d_point_dict
         prev_indices_mapping = cur_indices_mapping
+        track_db.set_ex_camera_positions(camera_positions)
+        track_db.set_ex_matrices(extrinsic_matrices)
 
     return camera_positions, track_db
 
@@ -101,6 +104,28 @@ def get_3d_points_cloud(inlier_indices_mapping, k, m1, m2, matcher, file_index=0
 def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mapping, ind_to_3d_point_prev,
                     track_db: TrackDatabase, frameId: int, matcher: Matcher):
     """
+    * Given prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind
+    ** Consider the first iteration, i.e., the consensus match between the 0th and the 1st frames:
+    **** FrameId is the 0 index (TODO: We should think about which of the two frames indices is more meaningful for this purpose)
+    **** Every consensus match is assigned as a new track with length of 2.
+    **** We start by appending the prev_left_ind, cur_left_ind to each track
+    **** each track is composed by 3 elements: (kp_prev, feature_location_prev, frameId)
+    **** In order to manage the bookkeeping of the tracks, we use a dictionary that is constructed as follows:
+    **** A double dictionary to store last left_kps indices (Keys) and a matching trackId (Values)
+    *********** [See _last_insertions in TrackDatabase]
+
+    **** Each matching between the pair of consecutive frames is keeping, where each kp used as a key, and the trackId
+    **** is kept as its value, where the primary key is the frameId.
+    **** Another thing we need to consider is that each time we insert new keypoint (calling add_track in other words)
+    **** we update the _last_insertions for the next iteration by assigning the current left kp (cur_left_kp).
+    **** on the i'th frameId, we update the _last_insertions[(i+1)%2], where _last_insertions is a dictionary of 2
+    **** dictionaries we constantly update.
+
+    ** 2+ iterations
+    **** Then, from this stage, we shall expect existing tracks in our db.
+    **** So, for any feature (referred as prev_left_ind) which is already belong to an existing track, we should be
+    **** able to find it in the _last_insertions[frameId][prev_left_ind], since on last iteration we inserted the
+    **** corresponding keypoint - cur_left_kp to the _last_insertions[(i+1) % 2] dictionary.
 
     :param matcher1:
     :param consecutive_matches:
@@ -109,28 +134,6 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
     :return:
     """
 
-    # * Given prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind
-    # ** Consider the first iteration, i.e., the consensus match between the 0th and the 1st frames:
-    # **** FrameId is the 0 index (TODO: We should think about which of the two frames indices is more meaningful for this purpose)
-    # **** Every consensus match is assigned as a new track with length of 2.
-    # **** We start by appending the prev_left_ind, cur_left_ind to each track
-    # **** each track is composed by 3 elements: (kp_prev, feature_location_prev, frameId)
-    # **** In order to manage the bookkeeping of the tracks, we use a dictionary that is constructed as follows:
-    # **** A double dictionary to store last left_kps indices (Keys) and a matching trackId (Values)
-    # *********** [See _last_insertions in TrackDatabase]
-
-    # **** Each matching between the pair of consecutive frames is keeping, where each kp used as a key, and the trackId
-    # **** is kept as its value, where the primary key is the frameId.
-    # **** Another thing we need to consider is that each time we insert new keypoint (calling add_track in other words)
-    # **** we update the _last_insertions for the next iteration by assigning the current left kp (cur_left_kp).
-    # **** on the i'th frameId, we update the _last_insertions[(i+1)%2], where _last_insertions is a dictionary of 2
-    # **** dictionaries we constantly update.
-
-    # ** 2+ iterations
-    # **** Then, from this stage, we shall expect existing tracks in our db.
-    # **** So, for any feature (referred as prev_left_ind) which is already belong to an existing track, we should be
-    # **** able to find it in the _last_insertions[frameId][prev_left_ind], since on last iteration we inserted the
-    # **** corresponding keypoint - cur_left_kp to the _last_insertions[(i+1) % 2] dictionary.
 
     concensus_matces = []
     filtered_matches = []
@@ -409,13 +412,13 @@ if __name__ == "__main__":
     PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
     track_db = TrackDatabase()
     deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
-    if deserialization_result == FAILURE:
-        _, track_db = track_camera_for_many_images()
-        track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
-    q1(PATH_TO_SAVE_TRACKER_FILE)
-    q2(PATH_TO_SAVE_TRACKER_FILE)
-    q3(PATH_TO_SAVE_TRACKER_FILE, num_to_show=10)
-    q4(PATH_TO_SAVE_TRACKER_FILE)
-    q5(PATH_TO_SAVE_TRACKER_FILE)
-    q6(PATH_TO_SAVE_TRACKER_FILE)
-    q7(PATH_TO_SAVE_TRACKER_FILE, length=10)
+    # if deserialization_result == FAILURE:
+    _, track_db = track_camera_for_many_images()
+    track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+    # q1(PATH_TO_SAVE_TRACKER_FILE)
+    # q2(PATH_TO_SAVE_TRACKER_FILE)
+    # q3(PATH_TO_SAVE_TRACKER_FILE, num_to_show=10)
+    # q4(PATH_TO_SAVE_TRACKER_FILE)
+    # q5(PATH_TO_SAVE_TRACKER_FILE)
+    # q6(PATH_TO_SAVE_TRACKER_FILE)
+    # q7(PATH_TO_SAVE_TRACKER_FILE, length=10)

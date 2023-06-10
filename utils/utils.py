@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import time
 import tqdm
+import gtsam
 MAC_OS_PATH = "../dataset/sequences/05/"
 WINDOWS_OS_PATH = "../dataset/sequences/05\\"
 SEP = "\\" if os.name == 'nt' else "/"
@@ -104,6 +105,41 @@ def rectificatied_stereo_pattern(y1, y2, indices_mapping, thresh=1):
     img1in, img2in = inlier_indices_mapping[0], inlier_indices_mapping[1]
     img1out, img2out = indices_mapping[0, outliers_idx], indices_mapping[1, outliers_idx]
     return img1in, img2in, img1out, img2out, inlier_indices_mapping
+
+def extinsic_to_global(extrinsic_cam):
+    R_m = extrinsic_cam[:, :3]
+    R = R_m.T
+    t_v = extrinsic_cam[:, 3]
+    t = - R_m.T @ t_v
+    ex_cam_mat_from_cam_to_world = np.hstack((R, t.reshape(3, 1)))
+    return ex_cam_mat_from_cam_to_world
+
+def get_gtsam_calib_mat(k, m2):
+    """
+    Creates a gtsam.Cal3_S2Stereo camera calibration matrix from a given calibration camera matrix.
+
+    Args:
+        k (numpy.ndarray): Calibration camera matrix of shape (3, 4).
+
+    Returns:
+        gtsam.Cal3_S2Stereo: GTSAM camera calibration matrix.
+
+    """
+
+    # Extract individual calibration parameters from the calibration camera matrix
+    fx = k[0, 0]   # Focal length in x-axis
+    fy = k[1, 1]   # Focal length in y-axis
+    skew = k[0, 1]  # Skew
+    cx = k[0, 2]   # Principal point x-coordinate
+    cy = k[1, 2]   # Principal point y-coordinate
+
+    # Get baseline from some data source (e.g., Data.KITTI.get_M2())
+    baseline = m2[0, 3]
+
+    # Create a GTSAM Cal3_S2Stereo camera calibration matrix
+    gtsam_calib_mat = gtsam.Cal3_S2Stereo(fx, fy, skew, cx, cy, -baseline)
+
+    return gtsam_calib_mat
 
 
 def track_camera_for_many_images(thresh=0.4):
