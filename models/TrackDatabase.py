@@ -8,7 +8,9 @@ FEATURES = 1
 EVEN = 0
 ODD = 1
 
+
 class TrackDatabase:
+
     def __init__(self, path_to_pkl_file=None):
         if path_to_pkl_file:
             self.deserialize(path_to_pkl_file)
@@ -24,13 +26,15 @@ class TrackDatabase:
         self._min_length = np.inf
         self._mean_frame_links = 0
         self._frame_id_to_inliers_ratio = {}
+        # I added these following attributes to be used in exercise 5:
+        self.camera_positions = None
+        self.ex_matrices = None
 
     def add_track(self, trackId, frameId, feature_location_prev, feature_location_cur, kp_prev, kp_cur):
         prev_feature = (kp_prev, feature_location_prev, frameId)
         cur_feature = (kp_cur, feature_location_cur, frameId + 1)
 
         try:
-
             # We add a later feature among the two features, since we inserted both the previous and the current
             # features on the track setup stage. Thus, we shall add the current feature for sake of consistency.
             self._tracks[trackId].append(cur_feature)
@@ -96,7 +100,9 @@ class TrackDatabase:
             'max_length': self._max_length,
             'min_length': self._min_length,
             'mean_frame_links': self._mean_frame_links,
-            'frame_id_to_inliers_ratio': self._frame_id_to_inliers_ratio
+            'frame_id_to_inliers_ratio': self._frame_id_to_inliers_ratio,
+            'ex_camera_positions': self.camera_positions,
+            'ex_matrices': self.ex_matrices
         }
         with open(file_path, 'wb') as f:
             pickle.dump(data, f)
@@ -116,6 +122,8 @@ class TrackDatabase:
                 self._min_length = data['min_length']
                 self._mean_frame_links = data['mean_frame_links']
                 self._frame_id_to_inliers_ratio = data['frame_id_to_inliers_ratio']
+                self.camera_positions = data['ex_camera_positions']
+                self.ex_matrices = data['ex_matrices']
             return Constants.SUCCESS
         except Exception:
             return Constants.FAILURE
@@ -176,10 +184,16 @@ class TrackDatabase:
             return 0
 
     def get_random_track_of_length(self, length):
+        """
+        Updated this implementation to return both the track itself combined with the corresponding trackId
+        :param length:
+        :return:
+        """
         tracks_of_given_length = []
+
         for trackId, track in self._tracks.items():
             if len(track) >= length:
-                tracks_of_given_length.append(track)
+                tracks_of_given_length.append((trackId, track))
         if len(tracks_of_given_length) > 0:
             return random.choice(tracks_of_given_length)
         return None
@@ -201,3 +215,16 @@ class TrackDatabase:
     def get_track_length_data(self):
         track_lengths = [len(self._tracks[trackId]) for trackId in self._tracks.keys()]
         return np.array(track_lengths)
+
+    def set_ex_camera_positions(self, camera_positions):
+        self.camera_positions = camera_positions
+
+    def set_ex_matrices(self, ex_matrices):
+        self.ex_matrices = ex_matrices
+
+    def get_camera_position_by_frameId(self, frameId):
+        return self.camera_positions[frameId]
+
+    def get_extrinsic_matrix_by_frameId(self, frameId):
+        return self.ex_matrices[frameId]
+
