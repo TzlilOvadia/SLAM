@@ -228,3 +228,25 @@ class TrackDatabase:
     def get_extrinsic_matrix_by_frameId(self, frameId):
         return self.ex_matrices[frameId]
 
+    def get_trackIds(self):
+        return self._tracks
+
+    def get_frameIds(self):
+        return self._frame_ids
+
+    def get_track_locations_in_segment(self, track_id, frame_id_start, frame_id_stop):
+        return [point for _, point, frame_id in self._tracks[track_id] if frame_id_start < frame_id <= frame_id_stop]
+
+    def get_tracks_in_bundle_window(self, start_frame_id, end_frame_id):
+        tracks_in_bundle = set()
+        for frame_id in range(start_frame_id, end_frame_id):
+            tracks = self.get_track_ids_for_frame(frame_id)
+            tracks_in_bundle.update(tracks)
+        return tracks_in_bundle
+
+    def get_all_points_in_track(self, track_id):
+        return [point for _, point,_ in self._tracks[track_id]]
+
+
+    def get_track_data(self, track_id):
+        return self._tracks[track_id]
