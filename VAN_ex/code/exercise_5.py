@@ -24,6 +24,7 @@ compose = lambda first_matrix, last_matrix: last_matrix @ np.append(first_matrix
 
 
 
+
 def criteria(frameIds, percentage=.87):
     """
     choosing proper keyframes using a median criterion
@@ -42,7 +43,7 @@ def criteria(frameIds, percentage=.87):
 
 def get_bundle_windows(key_frames):
     return [(key_frames[i - 1], key_frames[i]) for i in range(1, len(key_frames))]
-
+  
 
 def create_factor_graph(bundle_window_frameIds):
     """
@@ -143,6 +144,7 @@ def triangulate_and_project(track):
 
     last_cam_pose = gtsam.Pose3(last_camera_global)
     last_frame_pose = gtsam.StereoCamera(last_cam_pose, GTSAM_K)
+    
     last_point2 = gtsam.StereoPoint2(x_l_last, x_r_last, y_last)  # Get the 2D point in the last frame for triangulation
     last_point3 = last_frame_pose.backproject(last_point2)
 
@@ -179,6 +181,7 @@ def triangulate_and_project(track):
 
 
 def get_pose_for_frameId(first_frame_camera_matrix, frame_id):
+
     """
     Get the pose for a specific frame ID relative to the first frame.
 
@@ -293,5 +296,4 @@ if __name__ == "__main__":
         track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
     q1()
-
     q2()
