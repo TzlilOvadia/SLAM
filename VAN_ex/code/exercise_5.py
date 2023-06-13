@@ -2,7 +2,7 @@ import random
 import cv2
 import numpy as np
 from tqdm import tqdm
-
+from mpl_toolkits.mplot3d import Axes3D
 from VAN_ex.code.exercise_2 import least_squares
 from models.Matcher import Matcher
 from models.TrackDatabase import TrackDatabase
@@ -22,7 +22,7 @@ GTSAM_K = utils.get_gtsam_calib_mat(K, M2)
 
 compose = lambda first_matrix, last_matrix: last_matrix @ np.append(first_matrix, [np.array([0, 0, 0, 1])], axis=0)
 
-def criteria(frameIds, percentage=.82):
+def choose_key_frames_by_tracks_count_median(frameIds, percentage=.82):
     """
     choosing proper keyframes using a median criterion
     """
@@ -43,7 +43,7 @@ def get_bundle_windows(key_frames):
     return [(key_frames[i - 1], key_frames[i]) for i in range(1, len(key_frames))]
 
 
-def compute_distance(pose_i, pose_j):
+def _compute_distance(pose_i, pose_j):
     translation_i = pose_i[:3, 3]  # Extract translation vector from pose_i
     translation_j = pose_j[:3, 3]  # Extract translation vector from pose_j
 
@@ -51,14 +51,14 @@ def compute_distance(pose_i, pose_j):
     return distance
 
 
-def select_keyframes_distance(frames, min_distance_threshold=1, max_keyframes=20):
+def select_keyframes_by_track_max_distance(frames, min_distance_threshold=1, max_keyframes=20):
     distances = []
     for i in range(len(frames) - 1):
         frameId = frames[i]
         next_frameId = frames[i+1]
         pose_i = track_db.get_extrinsic_matrix_by_frameId(frameId)
         pose_j = track_db.get_extrinsic_matrix_by_frameId(next_frameId)
-        distance = compute_distance(pose_i, pose_j)
+        distance = _compute_distance(pose_i, pose_j)
         distances.append(distance)
 
     # Find frames with distances above the threshold
@@ -74,39 +74,26 @@ def select_keyframes_distance(frames, min_distance_threshold=1, max_keyframes=20
     return [frames[idx] for idx in keyframe_indices]
 
 
-def create_factor_graph(bundle_window_frameIds):
+def create_factor_graph(bundle_starts_in_frame_id=0, bundle_ends_in_frame_id=10):
     """
     Creates the factor graph for the bundle window
     """
     cam_pose = None
     landmarks = set()
-    # bundle_window_frameIds = [0, 4]
     # Compute the first frame's extrinsic matrix that maps points from camera coordinates to world coordinates
-    first_cam_pose = track_db.get_extrinsic_matrix_by_frameId(bundle_window_frameIds[0])
-    bundle_starts_in_frame_id = bundle_window_frameIds[0]
-    bundle_ends_in_frame_id = bundle_window_frameIds[-1]
-    # Initialize the factor graph and values
-    factor_graph = gtsam.NonlinearFactorGraph()
-    initial_estimates = gtsam.Values()
-    # Create factors and values for each frame
-    for i, frameId in enumerate(range(bundle_starts_in_frame_id, bundle_ends_in_frame_id)):
-        # Create camera symbol and update values dictionary
-        cam_pose_sym = gtsam.symbol(CAMERA, frameId)
-        cur_cam_pose = extinsic_to_global(compose(first_cam_pose, track_db.get_extrinsic_matrix_by_frameId(frameId)))
-        cam_pose = gtsam.Pose3(cur_cam_pose)
-        initial_estimates.insert(cam_pose_sym, gtsam.Pose3(cam_pose))
+    first_cam_pose = track_db.get_extrinsic_matrix_by_frameId(bundle_starts_in_frame_id)
 
-        if i == 0:
-            # Add prior factor for the first frame
-            prior_noise = gtsam.noiseModel.Diagonal.Sigmas([1,1,1,1,1,1])
-            factor_graph.add(gtsam.PriorFactorPose3(cam_pose_sym, cam_pose, prior_noise))
+    cam_pose, factor_graph, initial_estimates = init_factor_graph_variables(bundle_ends_in_frame_id,
+                                                                    bundle_starts_in_frame_id, cam_pose,
+                                                                            first_cam_pose)
 
     # Get all the tracks that related to this specific bundle window
     relevant_tracks = get_only_relevant_tracks(bundle_ends_in_frame_id, bundle_starts_in_frame_id)
+
     # For each relevant track, create measurement factors
     for track_data, trackId in relevant_tracks:
-        # track_data = track_db.get_track_data(track_id)
-        track_ends_in_frame_id = track_data[-1][-1]
+        # Check whether the track is too short
+        track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
         if track_ends_in_frame_id < bundle_ends_in_frame_id:
             continue
 
@@ -128,7 +115,6 @@ def create_factor_graph(bundle_window_frameIds):
 
             # Create the factor between the measured and projected points
             stereomodel_noise = gtsam.noiseModel.Diagonal.Sigmas(np.array([2, 2, 2]))
-
             factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, cam_symbol, point_symbol, GTSAM_K)
 
             # Add the factor to the factors list
@@ -136,6 +122,25 @@ def create_factor_graph(bundle_window_frameIds):
 
         # create_measurement_factor(track_id, track_point)
     return factor_graph, initial_estimates, landmarks
+
+
+def init_factor_graph_variables(bundle_ends_in_frame_id, bundle_starts_in_frame_id, cam_pose, first_cam_pose):
+    # Initialize the factor graph and values
+    factor_graph = gtsam.NonlinearFactorGraph()
+    initial_estimates = gtsam.Values()
+    # Create factors and values for each frame
+    for i, frameId in enumerate(range(bundle_starts_in_frame_id, bundle_ends_in_frame_id)):
+        # Create camera symbol and update values dictionary
+        cam_pose_sym = gtsam.symbol(CAMERA, frameId)
+        cur_cam_pose = extinsic_to_global(compose(first_cam_pose, track_db.get_extrinsic_matrix_by_frameId(frameId)))
+        cam_pose = gtsam.Pose3(cur_cam_pose)
+        initial_estimates.insert(cam_pose_sym, gtsam.Pose3(cam_pose))
+
+        if i == 0:
+            # Add prior factor for the first frame
+            prior_noise = gtsam.noiseModel.Diagonal.Sigmas([1, 1, 1, 1, 1, 1])
+            factor_graph.add(gtsam.PriorFactorPose3(cam_pose_sym, cam_pose, prior_noise))
+    return cam_pose, factor_graph, initial_estimates
 
 
 def get_only_relevant_tracks(bundle_ends_in_frame_id, bundle_starts_in_frame_id):
@@ -309,31 +314,24 @@ def q1():
     plt.title('Factor Error over Track')
     plt.show()
 
-    # Plot the factor errors
-    factor_errors = [compute_factor_error(factor, values) for factor in factors]
-    plt.plot(range(track[-1][-1]-track[0][-1]+1), factor_errors)
-    plt.xlabel('Frame Index')
-    plt.ylabel('Factor Error')
-    plt.title('Factor Error over Track')
-    plt.show()
 
 
 def q2():
+
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    # key_frames1 = criteria1(frameIds=frameIds)
-    key_frames = criteria(frameIds)
+    key_frames = choose_key_frames_by_tracks_count_median(frameIds, .85)
     # select_keyframes_distance(frameIds.keys())
     bundle_windows = get_bundle_windows(key_frames)
-    for bw in bundle_windows:
-        print(f"{bw} window size is {bw[1]- bw[0]}")
+
     # Step 2: Define Bundle Optimization
     first_bundle = bundle_windows[0]
-    bundle_starts_in_frame_id = first_bundle[0]
-    bundle_ends_in_frame_id = first_bundle[-1]
+    bundle_starts_in_frame_id = 0
+    bundle_ends_in_frame_id = 7
+
     # Step 3: Add Factors and Initial Estimates for Keyframes and Landmarks
-    bundle_graph, initial_estimates, landmarks = create_factor_graph(first_bundle)
+    bundle_graph, initial_estimates, landmarks = create_factor_graph(bundle_starts_in_frame_id, bundle_ends_in_frame_id)
 
     # Step 4: Perform Bundle Adjustment Optimization
     optimizer = gtsam.LevenbergMarquardtOptimizer(bundle_graph, initial_estimates)
@@ -348,16 +346,35 @@ def q2():
 
     # Step 6: Plot the Resulting Positions
     # Plotting the trajectory as a 3D graph
-    # gtsam.utils.plot.set_axes_equal(0)
-#     gtsam.utils.plot.plot_trajectory(fignum=0, values=optimized_estimates, title="Bundle Adjustment Trajectory")
-#     plt.show()
-#     optimized_landmarks = [optimized_estimates.atPoint3(lm_sym) for lm_sym in landmarks]
 
-#     initial_error_projection = bundle_graph.error(initial_estimates)
-#     optimized_error_projection = bundle_graph.error(optimized_estimates)
 
-#     print("Initial Projection Factor Error:", initial_error_projection)
-#     print("Optimized Projection Factor Error:", optimized_error_projection)
+
+    cameras = np.array([initial_estimates.atPose3(gtsam.symbol(CAMERA,frameId)) for frameId in range(bundle_ends_in_frame_id-bundle_starts_in_frame_id) ])  # List of gtsam.Pose3 objects representing poses
+
+    # Extract X and Y coordinates from the poses
+    x_coordinates = [pose.x() for pose in cameras]
+    y_coordinates = [pose.y() for pose in cameras]
+    z_coordinates = [pose.z() for pose in cameras]
+    colormap = plt.cm.get_cmap('rainbow')
+
+
+    fig = plt.figure(num=0)
+    ax=fig.add_subplot(projection='3d')
+    gtsam.utils.plot.plot_trajectory(fignum=0, values=optimized_estimates, title="Bundle Adjustment Trajectory")
+    gtsam.utils.plot.set_axes_equal(0)
+    ax.set_title(f"Left cameras and landmarks 2d trajectory for {len(cameras)} cameras.")
+    ax.scatter(x_coordinates, y_coordinates,z_coordinates, s=50, c=colormap(10), alpha=.9)
+    # Plot the trajectory in 2D
+    # landmarks_x = np.array([optimized_estimates.atPoint3(lm_sym)[0] for lm_sym in landmarks])
+    # landmarks_y = np.array([optimized_estimates.atPoint3(lm_sym)[1] for lm_sym in landmarks])
+    # landmarks_z = np.array([optimized_estimates.atPoint3(lm_sym)[2] for lm_sym in landmarks])
+    # ax.scatter(landmarks_x, landmarks_y, landmarks_z, s=50, c='blue')
+    ax.view_init(vertical_axis='y')
+    ax.set_xlim([-1, 1])
+    ax.set_ylim([-1, 1])
+    plt.show()
+
+    # Step 7: Pick a Projection Factor and Compute Error
 
 
 
