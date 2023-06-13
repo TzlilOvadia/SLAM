@@ -235,7 +235,7 @@ class TrackDatabase:
         return self._frame_ids
 
     def get_track_locations_in_segment(self, track_id, frame_id_start, frame_id_stop):
-        return [point for _, point, frame_id in self._tracks[track_id] if frame_id_start < frame_id <= frame_id_stop]
+        return [point for _, point, frame_id in self._tracks[track_id] if frame_id_start < frame_id <= frame_id_stop+1]
 
     def get_tracks_in_bundle_window(self, start_frame_id, end_frame_id):
         tracks_in_bundle = set()
