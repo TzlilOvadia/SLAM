@@ -145,7 +145,6 @@ def get_only_relevant_tracks(bundle_ends_in_frame_id, bundle_starts_in_frame_id)
     return relevant_tracks
 
 
-
 def triangulate_and_project(track):
     """
     Triangulate a 3D point from the last frame of the track
@@ -310,6 +309,14 @@ def q1():
     plt.title('Factor Error over Track')
     plt.show()
 
+    # Plot the factor errors
+    factor_errors = [compute_factor_error(factor, values) for factor in factors]
+    plt.plot(range(track[-1][-1]-track[0][-1]+1), factor_errors)
+    plt.xlabel('Frame Index')
+    plt.ylabel('Factor Error')
+    plt.title('Factor Error over Track')
+    plt.show()
+
 
 def q2():
     # Step 1: Select Keyframes
@@ -342,16 +349,15 @@ def q2():
     # Step 6: Plot the Resulting Positions
     # Plotting the trajectory as a 3D graph
     # gtsam.utils.plot.set_axes_equal(0)
-    gtsam.utils.plot.plot_trajectory(fignum=0, values=optimized_estimates, title="Bundle Adjustment Trajectory")
-    plt.show()
-    optimized_landmarks = [optimized_estimates.atPoint3(lm_sym) for lm_sym in landmarks]
-    # Step 6: Pick a Projection Factor and Compute Error
+#     gtsam.utils.plot.plot_trajectory(fignum=0, values=optimized_estimates, title="Bundle Adjustment Trajectory")
+#     plt.show()
+#     optimized_landmarks = [optimized_estimates.atPoint3(lm_sym) for lm_sym in landmarks]
 
-    initial_error_projection = bundle_graph.error(initial_estimates)
-    optimized_error_projection = bundle_graph.error(optimized_estimates)
+#     initial_error_projection = bundle_graph.error(initial_estimates)
+#     optimized_error_projection = bundle_graph.error(optimized_estimates)
 
-    print("Initial Projection Factor Error:", initial_error_projection)
-    print("Optimized Projection Factor Error:", optimized_error_projection)
+#     print("Initial Projection Factor Error:", initial_error_projection)
+#     print("Optimized Projection Factor Error:", optimized_error_projection)
 
 
 
