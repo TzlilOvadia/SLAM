@@ -30,14 +30,31 @@ def gen_hist(data, bins, title="", x="X", y="Y"):
     plt.show()
 
 
-def plot_trajectories(camera_positions, gt_camera_positions):
+def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_positions, path=""):
+    plt.figure()
+    localization_error = np.linalg.norm(np.abs(camera_positions - gt_camera_positions), axis=1)
+    plt.plot(keyframes, localization_error)
+    plt.xlabel("KeyFrame Index")
+    plt.ylabel("Localization error (meters)")
+    plt.title("KeyFrame Localization Error Over Time")
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
+
+
+def plot_trajectories(camera_positions, gt_camera_positions, path=""):
+    plt.figure()
     plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
     plt.scatter(x=gt_camera_positions[:, 0], y=gt_camera_positions[:, 2], color='orange', label='ground truth trajectory', s=0.75)
     plt.xlabel("X")
     plt.ylabel("Z")
     plt.title("Our Trajectory Vs Ground Truth Trajectory")
     plt.legend()
-    plt.show()
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
 
 
 def draw_supporting_matches(file_index, matcher, matches, supporting_indices):

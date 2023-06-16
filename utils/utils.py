@@ -107,13 +107,13 @@ def rectificatied_stereo_pattern(y1, y2, indices_mapping, thresh=1):
     return img1in, img2in, img1out, img2out, inlier_indices_mapping
 
 
-def extinsic_to_global(extrinsic_cam):
-    R_m = extrinsic_cam[:, :3]
+def invert_Rt_transformation(original_Rt):
+    R_m = original_Rt[:, :3]
     R = R_m.T
-    t_v = extrinsic_cam[:, 3]
+    t_v = original_Rt[:, 3]
     t = - R_m.T @ t_v
-    ex_cam_mat_from_cam_to_world = np.hstack((R, t.reshape(3, 1)))
-    return ex_cam_mat_from_cam_to_world
+    inverted_Rt = np.hstack((R, t.reshape(3, 1)))
+    return inverted_Rt
 
 
 def get_gtsam_calib_mat(k, m2):
