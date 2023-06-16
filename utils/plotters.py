@@ -46,7 +46,9 @@ def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_pos
 def plot_trajectories(camera_positions, gt_camera_positions, path=""):
     plt.figure()
     plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
+    plt.scatter(x=camera_positions[:2, 0], y=camera_positions[0, 2], color='blue', s=20)
     plt.scatter(x=gt_camera_positions[:, 0], y=gt_camera_positions[:, 2], color='orange', label='ground truth trajectory', s=0.75)
+    plt.scatter(x=gt_camera_positions[:2, 0], y=gt_camera_positions[0, 2], color='orange', s=10)
     plt.xlabel("X")
     plt.ylabel("Z")
     plt.title("Our Trajectory Vs Ground Truth Trajectory")

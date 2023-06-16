@@ -112,8 +112,8 @@ def invert_Rt_transformation(original_Rt):
     R = R_m.T
     t_v = original_Rt[:, 3]
     t = - R_m.T @ t_v
-    inverted_Rt = np.hstack((R, t.reshape(3, 1)))
-    return inverted_Rt
+    ex_cam_mat_from_cam_to_world = np.hstack((R, t.reshape(3, 1)))
+    return ex_cam_mat_from_cam_to_world
 
 
 def get_gtsam_calib_mat(k, m2):

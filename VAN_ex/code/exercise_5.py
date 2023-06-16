@@ -25,6 +25,7 @@ compose = lambda first_matrix, last_matrix: last_matrix @ np.append(first_matrix
 
 def get_relative_transformation_same_source_cs(T1, T2):
     # returning T from T1 dest cs to T2 dest cs.
+    T1, T2 = np.copy(T1), np.copy(T2)
     R1, t1 = T1[:, :-1], T1[:, -1]
     R2, t2 = T2[:, :-1], T2[:, -1]
     res = np.zeros_like(T1)
@@ -112,17 +113,17 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
     """
     Creates the factor graph for the bundle window
     """
-    cam_pose = None
+
     landmarks = set()
     # Compute the first frame's extrinsic matrix that maps points from camera coordinates to world coordinates
     first_cam_pose = track_db.get_extrinsic_matrix_by_frameId(bundle_starts_in_frame_id)
 
-    frameId_to_cam_pose, factor_graph, initial_estimates = init_factor_graph_variables(bundle_ends_in_frame_id,
+    frameId_to_cam_pose, factor_graph, initial_estimates = init_factor_graph_variables(track_db, bundle_ends_in_frame_id,
                                                                     bundle_starts_in_frame_id,
                                                                             first_cam_pose)
 
     # Get all the tracks that related to this specific bundle window
-    relevant_tracks = get_only_relevant_tracks(bundle_ends_in_frame_id, bundle_starts_in_frame_id)
+    relevant_tracks = get_only_relevant_tracks(track_db, bundle_ends_in_frame_id, bundle_starts_in_frame_id)
 
     # For each relevant track, create measurement factors
     for track_data, trackId in relevant_tracks:
@@ -155,7 +156,7 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
             measured_point2 = gtsam.StereoPoint2(location[0], location[1], location[2])
 
             # Create the factor between the measured and projected points
-            stereomodel_noise = gtsam.noiseModel.Diagonal.Sigmas(0.1*np.array([2, 2, 2]))
+            stereomodel_noise = gtsam.noiseModel.Diagonal.Sigmas(1*np.array([2, 2, 2]))
             factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, cam_symbol, point_symbol, GTSAM_K)
 
             # Add the factor to the factors list
@@ -165,7 +166,7 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
     return factor_graph, initial_estimates, landmarks
 
 
-def init_factor_graph_variables(bundle_ends_in_frame_id, bundle_starts_in_frame_id, first_cam_pose):
+def init_factor_graph_variables(track_db, bundle_ends_in_frame_id, bundle_starts_in_frame_id, first_cam_pose):
     # Initialize the factor graph and values
     factor_graph = gtsam.NonlinearFactorGraph()
     initial_estimates = gtsam.Values()
@@ -194,7 +195,7 @@ def init_factor_graph_variables(bundle_ends_in_frame_id, bundle_starts_in_frame_
 #     relevant_tracks = [(track, trackId) for (track, trackId) in tracks if track[-1][-1] >= bundle_ends_in_frame_id]
 #     return relevant_tracks
 
-def get_only_relevant_tracks(bundle_ends_in_frame_id, bundle_starts_in_frame_id):
+def get_only_relevant_tracks(track_db, bundle_ends_in_frame_id, bundle_starts_in_frame_id):
     bundle_length = 1 + bundle_ends_in_frame_id - bundle_starts_in_frame_id
     tracksIds = set()
     frameIds_in_bundle = set(range(bundle_starts_in_frame_id, bundle_ends_in_frame_id+1))
@@ -457,10 +458,13 @@ def q3():
     bundle_results = []
     for i, bundle_window in enumerate(bundle_windows):
         print(f"----------------Solving bundle # {i} from frame {bundle_window[0]} to frame {bundle_window[1]}------------------")
-        bundle_graph, initial_estimates, landmarks, optimized_estimates = solve_one_bundle(track_db, bundle_window, debug=True)
+        bundle_graph, initial_estimates, landmarks, optimized_estimates = solve_one_bundle(track_db, bundle_window, debug=False)
         bundle_results.append((i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates))
         num_factor_in_bundles.append(bundle_graph.size())
         print(f"number of factors in graph is {num_factor_in_bundles[-1]}")
+        initial_error = bundle_graph.error(initial_estimates)
+        optimized_error = bundle_graph.error(optimized_estimates)
+        print(f"initial graph error was {initial_error}, and after optimization the error is {optimized_error}")
     print(f"FINISHED SOLVING BUNDLES!")
     print(f"Mean number of factors per graph is: {np.mean(num_factor_in_bundles)})")
     print(f"Min number of factors over graphs: {np.min(num_factor_in_bundles)})")
@@ -483,7 +487,7 @@ def q3():
         estimated_camera_position = optimized_estimates.atPose3(gtsam.symbol(CAMERA, bundle_window[1]))  # transforms from end of bundle to its beginning
         optimized_relative_keyframes_poses.append(estimated_camera_position)
         previous_global_pose = optimized_global_keyframes_poses[-1]  # transforms from beginning of bundle to global world
-        current_global_pose = estimated_camera_position * previous_global_pose # transforms from end of bundle to global world
+        current_global_pose = previous_global_pose * estimated_camera_position # transforms from end of bundle to global world
         optimized_global_keyframes_poses.append(current_global_pose)
 
     # Step 5: Compare Our Results With The Ground Truth Trajectory
@@ -499,12 +503,13 @@ def q3():
     a = 5  # for you
 
 if __name__ == "__main__":
+    import exercise_4
     random.seed(6)
     s = gtsam.StereoCamera()
     track_db = TrackDatabase()
     deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
     if deserialization_result == FAILURE:
-        _, track_db = track_camera_for_many_images()
+        _, track_db = exercise_4.track_camera_for_many_images()
         track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
     q3()
     exit()
