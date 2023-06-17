@@ -33,6 +33,9 @@ def get_relative_transformation_same_source_cs(T1, T2):
     res[:,-1] = t2 - R2@R1.T@t1
     return res
 
+
+
+
 def alt_compose(T_a_c, T_a_b):
     R1, t1 = T_a_b[:, :-1], T_a_b[:, -1]
     R2, t2 = T_a_c[:, :-1], T_a_c[:, -1]
@@ -86,27 +89,22 @@ def _compute_distance(pose_i, pose_j):
     return distance
 
 
-def select_keyframes_by_track_max_distance(frames, min_distance_threshold=1, max_keyframes=20):
-    distances = []
-    for i in range(len(frames) - 1):
-        frameId = frames[i]
-        next_frameId = frames[i+1]
-        pose_i = track_db.get_extrinsic_matrix_by_frameId(frameId)
-        pose_j = track_db.get_extrinsic_matrix_by_frameId(next_frameId)
-        distance = _compute_distance(pose_i, pose_j)
-        distances.append(distance)
+def select_keyframes_by_track_max_distance(frames):
+    frameIds = [0]
+    frameId = 1
+    # while frameId < len(frames):
+    while frameId < 400:
+        cur_pose = track_db.get_extrinsic_matrix_by_frameId(frameId)
+        prev_pose = track_db.get_extrinsic_matrix_by_frameId(frameIds[-1])
+        distance = _compute_distance(prev_pose, cur_pose)
+        frameId += 1
+        window_size =  frameId-frameIds[-1]
 
-    # Find frames with distances above the threshold
-    keyframe_indices = [0]  # Start with the first frame as a keyframe
-    for i, distance in enumerate(distances):
-        if distance > min_distance_threshold:
-            keyframe_indices.append(i + 1)  # Add 1 to account for indexing difference
+        if (distance > 5 and frameId-frameIds[-1]>=5 or window_size == 15) :
+            print(f"window_size: {window_size} and distance: {distance}")
+            frameIds.append(frameId)
 
-    # Limit the number of keyframes
-    if len(keyframe_indices) > max_keyframes:
-        keyframe_indices = keyframe_indices[:max_keyframes]
-
-    return [frames[idx] for idx in keyframe_indices]
+    return frameIds
 
 
 def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_frame_id):
@@ -408,7 +406,8 @@ def q2():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = choose_key_frames_by_elapsed_time(frameIds, 10)
+    # key_frames = choose_key_frames_by_elapsed_time(frameIds, 10)
+    key_frames=select_keyframes_by_track_max_distance(frameIds)
     # select_keyframes_distance(frameIds.keys())
     bundle_windows = get_bundle_windows(key_frames)
 
@@ -433,9 +432,6 @@ def q2():
     ax.set_title(f"Left cameras 3d optimized trajectory for {len(optimized_cameras)} cameras.")
     ax.scatter(x_coordinates, y_coordinates,z_coordinates, s=50)
     ax.view_init(vertical_axis='y')
-    # ax.set_xlim([-100, 100])
-    # ax.set_zlim([-100, 100])
-    # ax.set_ylim([-100, 100])
     plt.show()
     # plt.savefig(PATH_TO_SAVE_3D_TRAJECTORY)
 
@@ -475,9 +471,9 @@ def q2():
     ax.scatter(landmarks_x, landmarks_y, landmarks_z, s=50, c='red',label='landmarks')
     ax.view_init(vertical_axis='y', azim=90, elev=90)
     ax.legend()
-    ax.set_xlim([-100, 100])
+    # ax.set_xlim([-100, 100])
     ax.set_zlim([0, 150])
-    ax.set_ylim([-100, 100])
+    # ax.set_ylim([-100, 100])
     plt.show()
     # plt.savefig(PATH_TO_SAVE_3D_TRAJECTORY)
 
@@ -510,7 +506,7 @@ def q3():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = choose_key_frames_by_elapsed_time(frameIds, 20)
+    key_frames = select_keyframes_by_track_max_distance(frameIds)
     bundle_windows = get_bundle_windows(key_frames)
 
     # Step 2: Solve Every Bundle Window
@@ -577,9 +573,9 @@ if __name__ == "__main__":
 
 
 
-    # q3()
+    q3()
     # exit()
     # q1()
-    # exit()
+    exit()
     q2()
     exit()
