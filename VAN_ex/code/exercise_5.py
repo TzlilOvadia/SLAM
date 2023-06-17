@@ -10,7 +10,7 @@ from models.TrackDatabase import TrackDatabase
 from utils import utils
 from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches, draw_matches, plot_four_cameras, \
     draw_supporting_matches, plot_trajectories, plot_regions_around_matching_pixels, plot_dict, plot_connectivity_graph, \
-    gen_hist, plot_reprojection_errors, plot_localization_error_over_time
+    gen_hist, plot_reprojection_errors, plot_localization_error_over_time, plot_projections_on_images, plot_trajectory_and_points
 from utils.utils import *
 from matplotlib import pyplot as plt
 from models.Constants import *
@@ -344,8 +344,9 @@ def compute_factor_error(factor, values):
     """
     Compute the factor error given a factor and a values dictionary.
     """
-    error = factor.unwhitenedError(values) # TODO is this the correct error function? what about .error? I would think that no need for another norm
-    return np.linalg.norm(error)
+    return factor.error(values)
+    # error = factor.unwhitenedError(values) # TODO is this the correct error function? what about .error? I would think that no need for another norm
+    # return np.linalg.norm(error)
 
 
 def q1():
@@ -374,6 +375,13 @@ def q1():
     plt.title('Factor Error over Track')
     #plt.show()
     plt.savefig(PATH_TO_SAVE_FACTOR_ERROR_OVER_TRACK_FRAMES)
+
+    plt.figure()
+    plt.plot(reprojection_errors, factor_errors)
+    plt.xlabel("reprojection error")
+    plt.ylabel('factor error')
+    plt.title("Factor error as function of ReProjection Error")
+    plt.savefig(PATH_TO_SAVE_FACTOR_ERROR_OVER_TRACK_FRAMES + "as_func_of_reproj_error")
 
 
 def solve_one_bundle(track_db, bundle_window, debug=True):
@@ -439,8 +447,26 @@ def q2():
     #plt.show()
     plt.savefig(PATH_TO_SAVE_3D_TRAJECTORY)
 
-    # Step 7: Pick a Projection Factor and Compute Error
 
+    # Step 7: Pick a Projection Factor and Compute Error
+    print(f"Choosing some projection factor from the bundle graph...")
+    some_factor = bundle_graph.at(20)
+    print(f"Printing the factor's error over the initial estimates: {some_factor.error(initial_estimates)}")
+    print(f"Printing the factor's error over the optimized estimates: {some_factor.error(optimized_estimates)}")
+    initial_c_pose = initial_estimates.atPose3(some_factor.keys()[0])
+    initial_q = initial_estimates.atPoint3(some_factor.keys()[1])
+    optimized_q = optimized_estimates.atPoint3(some_factor.keys()[1])
+    stereo_camera = gtsam.StereoCamera(initial_c_pose, GTSAM_K)
+    stereo_point_2d = stereo_camera.project(initial_q)
+    measured_point_2d = some_factor.measured()
+    optimized_point_2d = stereo_camera.project(optimized_q)
+    left_image, right_image = read_images(9)
+    plot_projections_on_images(left_image, right_image, measured_point_2d, stereo_point_2d, optimized_point_2d)
+
+    all_points = gtsam.utilities.extractPoint3(optimized_estimates)
+    all_poses = gtsam.utilities.extractPose3(optimized_estimates).reshape(-1, 4, 3).transpose(0, 2, 1)
+    camera_positions = np.array([pose[:,-1] for pose in all_poses])
+    plot_trajectory_and_points(camera_positions,all_points)
 
 def q3():
     PATH_TO_SAVE_COMPARISON_TO_GT = "q3_compare_to_ground_truth"
@@ -481,7 +507,10 @@ def q3():
     # Step 4: Extracting Relative Poses Between Consecutive KeyFrames, and Also their Global Pose (relative to frame 0)
     optimized_relative_keyframes_poses = []
     optimized_global_keyframes_poses = []
-    optimized_global_keyframes_poses.append(gtsam.Pose3())  # Initialize with first camera pose
+    _, bundle_window, _, _, _, optimized_estimates = bundle_results[0]
+    estimated_camera_position = optimized_estimates.atPose3(gtsam.symbol(CAMERA, bundle_window[0]))
+    optimized_global_keyframes_poses.append(estimated_camera_position)
+    #optimized_global_keyframes_poses.append(gtsam.Pose3())  # Initialize with first camera pose
     for bundle_res in bundle_results:
         i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = bundle_res
         estimated_camera_position = optimized_estimates.atPose3(gtsam.symbol(CAMERA, bundle_window[1]))  # transforms from end of bundle to its beginning
@@ -511,8 +540,11 @@ if __name__ == "__main__":
     if deserialization_result == FAILURE:
         _, track_db = exercise_4.track_camera_for_many_images()
         track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+
+
+
     q3()
     exit()
     q1()
-
+    exit()
     q2()

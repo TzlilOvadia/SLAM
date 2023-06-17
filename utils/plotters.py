@@ -42,6 +42,15 @@ def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_pos
     else:
         plt.show()
 
+def plot_trajectory_and_points(camera_positions, points_locations):
+    plt.figure()
+    plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='camera locations', s=0.75)
+    plt.scatter(x=points_locations[:, 0], y=points_locations[:, 2], color='orange', label='points locations', s=0.75)
+    plt.xlabel("X")
+    plt.ylabel("Z")
+    plt.title("Camera locations and landmarks")
+    plt.legend()
+    plt.savefig("q2_camera_and_points")
 
 def plot_trajectories(camera_positions, gt_camera_positions, path=""):
     plt.figure()
@@ -379,3 +388,18 @@ def plot_reprojection_errors(frame_ids, left_errors, right_errors, frame):
     plt.title(f"reprojection error per image, triangulated from {frame} frame")
     plt.legend()
     plt.show()
+
+
+def plot_projections_on_images(left_img, right_img, measurement, projected_before_optimization, projected_after_optimization):
+    img3 = cv2.vconcat([cv2.cvtColor(left_img, cv2.COLOR_GRAY2BGR), cv2.cvtColor(right_img, cv2.COLOR_GRAY2BGR)])
+    measured_x_l, measured_x_r, measured_y_l = measurement.uL(), measurement.uR(), measurement.v()
+    initial_x_l, initial_x_r, initial_y_l = projected_before_optimization.uL(), projected_before_optimization.uR(), projected_before_optimization.v()
+    optimized_x_l, optimized_x_r, optimized_y_l = projected_after_optimization.uL(), projected_after_optimization.uR(), projected_after_optimization.v()
+    measured_y_r, initial_y_r, optimized_y_r = measured_y_l + left_img.shape[0], initial_y_l + left_img.shape[0], optimized_y_l + left_img.shape[0]
+    plt.figure(figsize=(16, 9))
+    plt.imshow(img3)
+    plt.scatter([measured_x_l, measured_x_r], [measured_y_l, measured_y_r], s=20, label="measured")
+    plt.scatter([initial_x_l, initial_x_r], [initial_y_l, initial_y_r], s=20, label="initial")
+    plt.scatter([optimized_x_l, optimized_x_r], [optimized_y_l, optimized_y_r], s=20, label="optimized")
+    plt.legend()
+    plt.savefig("q2_compare_projections")
