@@ -345,8 +345,6 @@ def compute_factor_error(factor, values):
     Compute the factor error given a factor and a values dictionary.
     """
     return factor.error(values)
-    # error = factor.unwhitenedError(values) # TODO is this the correct error function? what about .error? I would think that no need for another norm
-    # return np.linalg.norm(error)
 
 
 def q1():
@@ -405,7 +403,7 @@ def solve_one_bundle(track_db, bundle_window, debug=True):
 
 
 def q2():
-    # PATH_TO_SAVE_3D_TRAJECTORY = "q2_3d_trajectory_after_optimization"
+    PATH_TO_SAVE_3D_TRAJECTORY = "q2_3d_trajectory_after_optimization"
     PATH_TO_SAVE_2D_TRAJECTORY = "q2_2d_trajectory_after_optimization" # TODO ADD THIS REQUIRED VISUALIZATION
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
