@@ -129,8 +129,8 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
     for track_data, trackId in relevant_tracks:
         # Check whether the track is too short
         track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
-        # if track_ends_in_frame_id < bundle_ends_in_frame_id:
-        #     continue
+        if track_ends_in_frame_id < bundle_ends_in_frame_id:
+            continue
         # TODO original code uses a 2d point coordinates from last frame of track, but uses the cam_pose of the last frame in the bundle... wrong
         # Create measurement factor for this track point
         offset = track_data[0][FRAME_ID]
@@ -405,7 +405,7 @@ def solve_one_bundle(track_db, bundle_window, debug=True):
 
 
 def q2():
-    PATH_TO_SAVE_3D_TRAJECTORY = "q2_3d_trajectory_after_optimization"
+    # PATH_TO_SAVE_3D_TRAJECTORY = "q2_3d_trajectory_after_optimization"
     PATH_TO_SAVE_2D_TRAJECTORY = "q2_2d_trajectory_after_optimization" # TODO ADD THIS REQUIRED VISUALIZATION
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
@@ -419,33 +419,69 @@ def q2():
     bundle_graph, initial_estimates, landmarks, optimized_estimates = solve_one_bundle(track_db,first_bundle,debug=True)
 
     # Plot the Resulting Positions
-    # Plotting the trajectory as a 3D graph
+    # Plotting the optimized trajectory as a 3D graph
     bundle_starts_in_frame_id, bundle_ends_in_frame_id =  first_bundle
-    cameras = np.array([initial_estimates.atPose3(gtsam.symbol(CAMERA,frameId)) for frameId in range(bundle_starts_in_frame_id, bundle_ends_in_frame_id+1)])  # List of gtsam.Pose3 objects representing poses
+    optimized_cameras = np.array([optimized_estimates.atPose3(gtsam.symbol(CAMERA,frameId)) for frameId in range(bundle_starts_in_frame_id, bundle_ends_in_frame_id+1)])  # List of gtsam.Pose3 objects representing poses
 
-    # Extract X and Y coordinates from the poses
-    x_coordinates = [pose.x() for pose in cameras]
-    y_coordinates = [pose.y() for pose in cameras]
-    z_coordinates = [pose.z() for pose in cameras]
-    colormap = plt.cm.get_cmap('rainbow')
+    x_coordinates = [pose.x() for pose in optimized_cameras]
+    y_coordinates = [pose.y() for pose in optimized_cameras]
+    z_coordinates = [pose.z() for pose in optimized_cameras]
 
 
     fig = plt.figure(num=0)
     ax=fig.add_subplot(projection='3d')
     gtsam.utils.plot.plot_trajectory(fignum=0, values=optimized_estimates, title="Bundle Adjustment Trajectory")
     gtsam.utils.plot.set_axes_equal(0)
-    ax.set_title(f"Left cameras and landmarks 2d trajectory for {len(cameras)} cameras.")
-    ax.scatter(x_coordinates, y_coordinates,z_coordinates, s=50, c=colormap(10), alpha=.9)
+    ax.set_title(f"Left cameras 3d optimized trajectory for {len(optimized_cameras)} cameras.")
+    ax.scatter(x_coordinates, y_coordinates,z_coordinates, s=50)
+    ax.view_init(vertical_axis='y')
+    # ax.set_xlim([-100, 100])
+    # ax.set_zlim([-100, 100])
+    # ax.set_ylim([-100, 100])
+    plt.show()
+    # plt.savefig(PATH_TO_SAVE_3D_TRAJECTORY)
+
+
+    # Plotting the initial estimates trajectory as a 3D graph
+
+    cameras = np.array([initial_estimates.atPose3(gtsam.symbol(CAMERA,frameId)) for frameId in range(bundle_starts_in_frame_id, bundle_ends_in_frame_id+1)])  # List of gtsam.Pose3 objects representing poses
+
+    # Extract X and Y coordinates from the poses
+    x_coordinates = [pose.x() for pose in cameras]
+    y_coordinates = [pose.y() for pose in cameras]
+    z_coordinates = [pose.z() for pose in cameras]
+
+    fig = plt.figure(num=0)
+    ax = fig.add_subplot(projection='3d')
+    gtsam.utils.plot.plot_trajectory(fignum=0, values=initial_estimates, title="Bundle Adjustment Trajectory")
+    gtsam.utils.plot.set_axes_equal(0)
+    ax.set_title(f"Left cameras 3d initial  trajectory for {len(cameras)} cameras.")
+    ax.scatter(x_coordinates, y_coordinates, z_coordinates, s=50)
+    ax.view_init(vertical_axis='y')
+    plt.show()
+    # plt.savefig(PATH_TO_SAVE_3D_TRAJECTORY)
+
+    fig = plt.figure(num=0)
+    ax = fig.add_subplot(projection='3d')
+    gtsam.utils.plot.plot_trajectory(fignum=0, values=initial_estimates, title="Bundle Adjustment Trajectory")
+    gtsam.utils.plot.set_axes_equal(0)
+    ax.set_title(f"Left cameras 3d initial  trajectory for {len(cameras)} cameras.")
+    ax.scatter(x_coordinates, y_coordinates, z_coordinates, s=50, label="cameras")
+
     #Plot the trajectory in 2D
     landmarks_x = np.array([optimized_estimates.atPoint3(lm_sym)[0] for lm_sym in landmarks])
     landmarks_y = np.array([optimized_estimates.atPoint3(lm_sym)[1] for lm_sym in landmarks])
     landmarks_z = np.array([optimized_estimates.atPoint3(lm_sym)[2] for lm_sym in landmarks])
-    ax.scatter(landmarks_x, landmarks_y, landmarks_z, s=50, c='blue')
-    ax.view_init(vertical_axis='y')
-    ax.set_xlim([-1, 1])
-    ax.set_ylim([-1, 1])
-    #plt.show()
-    plt.savefig(PATH_TO_SAVE_3D_TRAJECTORY)
+    ax.set_title(f"Left cameras and landmarks 2d trajectory with points {len(cameras)} cameras.")
+
+    ax.scatter(landmarks_x, landmarks_y, landmarks_z, s=50, c='red',label='landmarks')
+    ax.view_init(vertical_axis='y', azim=90, elev=90)
+    ax.legend()
+    ax.set_xlim([-100, 100])
+    ax.set_zlim([0, 150])
+    ax.set_ylim([-100, 100])
+    plt.show()
+    # plt.savefig(PATH_TO_SAVE_3D_TRAJECTORY)
 
 
     # Step 7: Pick a Projection Factor and Compute Error
@@ -543,8 +579,9 @@ if __name__ == "__main__":
 
 
 
-    q3()
-    exit()
-    q1()
-    exit()
+    # q3()
+    # exit()
+    # q1()
+    # exit()
     q2()
+    exit()
