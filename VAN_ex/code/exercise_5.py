@@ -100,7 +100,7 @@ def select_keyframes_by_track_max_distance(frames):
         frameId += 1
         window_size =  frameId-frameIds[-1]
 
-        if (distance > 5 and frameId-frameIds[-1]>=5 or window_size == 15) :
+        if (distance > 5 and frameId-frameIds[-1]>=5 or window_size == 10) :
             print(f"window_size: {window_size} and distance: {distance}")
             frameIds.append(frameId)
 
@@ -194,11 +194,7 @@ def init_factor_graph_variables(track_db, bundle_ends_in_frame_id, bundle_starts
 #     return relevant_tracks
 
 def get_only_relevant_tracks(track_db, bundle_ends_in_frame_id, bundle_starts_in_frame_id):
-    bundle_length = 1 + bundle_ends_in_frame_id - bundle_starts_in_frame_id
     tracksIds = set()
-    frameIds_in_bundle = set(range(bundle_starts_in_frame_id, bundle_ends_in_frame_id+1))
-    for frame_id in range(bundle_starts_in_frame_id, bundle_ends_in_frame_id):
-        tracksIds.update(set(track_db.get_track_ids_for_frame(frame_id)))
     tracks = [(track_db.get_track_data(trackId), trackId) for trackId in tracksIds]
     relevant_tracks = [(track, trackId) for (track, trackId) in tracks if len(frameIds_in_bundle.intersection(set(track_db.get_frame_ids_for_track(trackId)))) >= 7]
     return relevant_tracks
