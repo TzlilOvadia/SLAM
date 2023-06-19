@@ -47,24 +47,38 @@ def alt_compose(T_a_c, T_a_b):
     return res
 
 
-def choose_key_frames_by_elapsed_time(frameIds, num_frames_per_bundle=25):
+def choose_key_frames_by_elapsed_time(frameIds):
     """
     choosing proper keyframes using time elapsed criterion
     """
     min_frameId, max_frameId = min(frameIds.keys()), max(frameIds.keys())
-    key_frames = [n for n in range(min_frameId, max_frameId + 1, num_frames_per_bundle-1)]
-    if 10 > (max_frameId - key_frames[-1]) > 0:
-        key_frames[-1] = max_frameId
-    elif (max_frameId - key_frames[-1]) >= 10:
-        key_frames.append(max_frameId)
+    # key_frames = [n for n in range(min_frameId, 500 + 1,5)]
+    key_frames = [0]
+    n = 1
+    while n < 490:
+        best_score = 0
+        best_candidate = n+1
+        cur_tracksIds = track_db.get_track_ids_for_frame(n)
+
+        for candidate in range(n + 3, n + 20):
+            candidate_tracksIds = track_db.get_track_ids_for_frame(candidate)
+
+            score1 = len(candidate_tracksIds)
+            score2 = sum([1 for tid in candidate_tracksIds if tid in cur_tracksIds])
+            if score1*score2 > best_score:
+                best_score = score1*score2
+                best_candidate = candidate
+        key_frames.append(best_candidate)
+        n = best_candidate
     return key_frames
 
 
-def choose_key_frames_by_tracks_count_median(frameIds, percentage=.82):
+def choose_key_frames_by_tracks_count_median(frameIds, percentage=.9):
     """
     choosing proper keyframes using a median criterion
     """
     # Sort frames based on track length (ascending order)
+    frameIds = list(frameIds.keys())[:500]
     sorted_frames = sorted(frameIds, key=lambda frameId: len(track_db.get_track_ids_for_frame(frameId)))
     for fid in sorted_frames:
         l = len(track_db.get_track_ids_for_frame(fid))
@@ -73,36 +87,47 @@ def choose_key_frames_by_tracks_count_median(frameIds, percentage=.82):
     median_index = int(len(sorted_frames) * percentage)
 
     # Select the keyframes from the median frame to the last frame
-    key_frames = sorted_frames[median_index:]
+    key_frames = sorted(sorted_frames[median_index:])
     # return [frameId for frameId in range(1, len(frameIds),5)]
     return key_frames
 
 def get_bundle_windows(key_frames):
     return [(key_frames[i - 1], key_frames[i]) for i in range(1, len(key_frames))]
 
-
+from scipy.spatial.transform import Rotation
 def _compute_distance(pose_i, pose_j):
     translation_i = pose_i[:3, 3]  # Extract translation vector from pose_i
     translation_j = pose_j[:3, 3]  # Extract translation vector from pose_j
 
     distance = np.linalg.norm(translation_j - translation_i)
-    return distance
+    rotation_i = Rotation.from_matrix(pose_i[:3, :3])  # Extract rotation matrix from pose_i and convert to a rotation object
+    rotation_j = Rotation.from_matrix(pose_j[:3, :3])  # Extract rotation matrix from pose_j and convert to a rotation object
+
+    rotation_diff = rotation_i.inv() * rotation_j  # Compute the relative rotation difference between pose_i and pose_j
+    axis_angle = rotation_diff.as_rotvec()
+    sign = 1 if np.sum(np.sign(axis_angle)) == (3 or -3) else -1 # Sign of the angle
+    # print(f"sign is {sign} for {axis_angle}")
+    return distance, rotation_diff.magnitude() * sign
 
 
 def select_keyframes_by_track_max_distance(frames):
     frameIds = [0]
     frameId = 1
     # while frameId < len(frames):
-    while frameId < 400:
+    rotation_accumulator = 0
+    while frameId < 1500:
         cur_pose = track_db.get_extrinsic_matrix_by_frameId(frameId)
         prev_pose = track_db.get_extrinsic_matrix_by_frameId(frameIds[-1])
-        distance = _compute_distance(prev_pose, cur_pose)
+        distance, angle = _compute_distance(prev_pose, cur_pose)
         frameId += 1
-        window_size =  frameId-frameIds[-1]
+        window_size = frameId-frameIds[-1]
+        rotation_accumulator += angle
 
-        if (distance > 5 and frameId-frameIds[-1]>=5 or window_size == 10) :
-            print(f"window_size: {window_size} and distance: {distance}")
+        if window_size == 10 or abs(rotation_accumulator) > .05 or abs(angle)>0.03:
+            print(f"traveled distance: {distance}, and rotation: {rotation_accumulator} over a window_size: {window_size}")
+
             frameIds.append(frameId)
+            rotation_accumulator = 0
 
     return frameIds
 
@@ -115,37 +140,41 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
     landmarks = set()
     # Compute the first frame's extrinsic matrix that maps points from camera coordinates to world coordinates
     first_cam_pose = track_db.get_extrinsic_matrix_by_frameId(bundle_starts_in_frame_id)
+    relevant_tracks = get_only_relevant_tracks(track_db, bundle_starts_in_frame_id)
 
     frameId_to_cam_pose, factor_graph, initial_estimates = init_factor_graph_variables(track_db, bundle_ends_in_frame_id,
                                                                     bundle_starts_in_frame_id,
                                                                             first_cam_pose)
-
     # Get all the tracks that related to this specific bundle window
-    relevant_tracks = get_only_relevant_tracks(track_db, bundle_ends_in_frame_id, bundle_starts_in_frame_id)
 
     # For each relevant track, create measurement factors
     for track_data, trackId in relevant_tracks:
         # Check whether the track is too short
         track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
+        track_starts_in_frame_id = track_data[0][FRAME_ID]
         if track_ends_in_frame_id < bundle_ends_in_frame_id:
             continue
+
         # TODO original code uses a 2d point coordinates from last frame of track, but uses the cam_pose of the last frame in the bundle... wrong
         # Create measurement factor for this track point
         offset = track_data[0][FRAME_ID]
         frameId_of_last_frame_of_track_in_bundle = min(bundle_ends_in_frame_id, track_ends_in_frame_id)
-        frameId_of_first_frame_of_track_in_bundle = max(bundle_starts_in_frame_id, track_data[0][FRAME_ID])
+        frameId_of_first_frame_of_track_in_bundle = max(bundle_starts_in_frame_id, track_starts_in_frame_id)
         cam_pose_of_last_frame = frameId_to_cam_pose[frameId_of_last_frame_of_track_in_bundle]
         last_frame_pose = gtsam.StereoCamera(cam_pose_of_last_frame, GTSAM_K)
         index_of_last_relevant_track_point = frameId_of_last_frame_of_track_in_bundle - offset
         last_loc = track_data[index_of_last_relevant_track_point][LOCATIONS_IDX]
         # Get the 2D point in the last frame for triangulation
         last_point2 = gtsam.StereoPoint2(last_loc[0], last_loc[1], last_loc[2])
+
         last_point3 = last_frame_pose.backproject(last_point2)
+
+        if last_point3[2] <= 0 or last_point3[2] >= MAX_DISTANCE_TOLERANCE or last_loc[0] < last_loc[1]:
+            continue
 
         point_symbol = gtsam.symbol(POINT, trackId)
         initial_estimates.insert(point_symbol, last_point3)
         landmarks.add(point_symbol)
-        #locations = np.array(track_data, dtype=object)[:,1,...]
         for i, frame_id in enumerate(range(frameId_of_first_frame_of_track_in_bundle, frameId_of_last_frame_of_track_in_bundle+1)):
             cam_symbol = gtsam.symbol(CAMERA, frame_id)
             index_of_relevant_track_point = frame_id - offset
@@ -154,7 +183,7 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
             measured_point2 = gtsam.StereoPoint2(location[0], location[1], location[2])
 
             # Create the factor between the measured and projected points
-            stereomodel_noise = gtsam.noiseModel.Diagonal.Sigmas(1*np.array([2, 2, 2]))
+            stereomodel_noise = gtsam.noiseModel.Isotropic.Sigma(3,1.0)
             factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, cam_symbol, point_symbol, GTSAM_K)
 
             # Add the factor to the factors list
@@ -172,33 +201,121 @@ def init_factor_graph_variables(track_db, bundle_ends_in_frame_id, bundle_starts
     # Create factors and values for each frame
     for i, frameId in enumerate(range(bundle_starts_in_frame_id, bundle_ends_in_frame_id + 1)):
         # Create camera symbol and update values dictionary
+        # print(f"{i}'th iter where frameId: {frameId} in window:{bundle_starts_in_frame_id},{bundle_ends_in_frame_id}")
         cam_pose_sym = gtsam.symbol(CAMERA, frameId)
         # TODO I think that the use of Compose was wrong here...
         #cur_cam_pose = invert_Rt_transformation(compose(first_cam_pose, track_db.get_extrinsic_matrix_by_frameId(frameId)))
-        cur_cam_pose = get_relative_transformation_same_source_cs(track_db.get_extrinsic_matrix_by_frameId(frameId),first_cam_pose)
+        cur_cam_pose = get_relative_transformation_same_source_cs(track_db.get_extrinsic_matrix_by_frameId(frameId), first_cam_pose)
         cam_pose = gtsam.Pose3(cur_cam_pose)
         initial_estimates.insert(cam_pose_sym, cam_pose)
         frameId_to_cam_pose[frameId] = cam_pose
         if i == 0:
             # Add prior factor for the first frame
-            prior_noise = gtsam.noiseModel.Diagonal.Sigmas([1, 1, 1, 2, 2, 2])
+            s= np.array([(30 * np.pi / 180) ** 2,(30 * np.pi / 180) ** 2,(1 * np.pi / 180) ** 2]  + [1.0, 0.01, 1.0])
+            prior_noise = gtsam.noiseModel.Diagonal.Sigmas(s)
             factor_graph.add(gtsam.PriorFactorPose3(cam_pose_sym, cam_pose, prior_noise))
     return frameId_to_cam_pose, factor_graph, initial_estimates
 
+def criteria(frames, percentage):
+    """
+    Choose keyframes by the median track len's from the last frame
+    """
+    key_frames = [0]
+    n = len(frames)
+    # while key_frames[-1] < 1800:
+    while key_frames[-1] < len(frames)-1:
+        last_key_frame = key_frames[-1]
+        frame = frames[last_key_frame]
+        tracks = track_db.get_track_ids_for_frame(frame)
 
-# def get_only_relevant_tracks(bundle_ends_in_frame_id, bundle_starts_in_frame_id):
-#     tracksIds = track_db.get_track_ids_for_frame(bundle_starts_in_frame_id)
-#     tracks = [(track_db.get_track_data(trackId), trackId) for trackId in tracksIds]
-#     # TODO don't we filter out too many tracks? what about tracks that were seen only on some of the bundle frames? and also need to make sure that we look only at relevant parts of selected tracks
-#     relevant_tracks = [(track, trackId) for (track, trackId) in tracks if track[-1][-1] >= bundle_ends_in_frame_id]
-#     return relevant_tracks
 
-def get_only_relevant_tracks(track_db, bundle_ends_in_frame_id, bundle_starts_in_frame_id):
+        tracks_by_lengths = sorted([track_db.get_track_data(trackId)[-1][FRAME_ID] for trackId in tracks])
+        new_key_frame = tracks_by_lengths[int(len(tracks_by_lengths) * percentage)]
+        distance, rotation = 0,0
+        for fid in range(frame+1, new_key_frame):
+            cur_pose = track_db.get_extrinsic_matrix_by_frameId(frame)
+            prev_pose = track_db.get_extrinsic_matrix_by_frameId(frame - 1)
+            cur_step, angle = _compute_distance(prev_pose, cur_pose)
+            distance += cur_step
+            rotation += angle
+            if (abs(rotation) > 0.2 or abs(distance) > 80) and (fid - frame) > 6:
+                new_key_frame = fid
+                break
+
+        key_frames.append(min(new_key_frame, n - 1))
+
+
+    return key_frames
+
+def get_only_relevant_tracks(track_db, frame_id):
     tracksIds = set()
-    tracks = [(track_db.get_track_data(trackId), trackId) for trackId in tracksIds]
-    relevant_tracks = [(track, trackId) for (track, trackId) in tracks if len(frameIds_in_bundle.intersection(set(track_db.get_frame_ids_for_track(trackId)))) >= 7]
+    tracksIds.update(set(track_db.get_track_ids_for_frame(frame_id)))
+    tracks = [(track_db.get_track_data(trackId), trackId) for trackId in tracksIds if 1 < len(track_db.get_track_data(trackId))]
+    relevant_tracks=[]
+    tmp = []
+
+    for track_data,tid in tracks:
+        distance, rotation = 0,0
+        i=0
+        steps = []
+        max_step_size=0
+        ys = []
+        xls = []
+        xrs = []
+
+        for frameId in range(track_data[0][FRAME_ID], track_data[-1][FRAME_ID]+1):
+            xl,xr,y = track_data[i][LOCATIONS_IDX]
+            i+=1
+            if xl < xr :
+                i=-1
+                break
+            cur_pose = track_db.get_extrinsic_matrix_by_frameId(frameId)
+            prev_pose = track_db.get_extrinsic_matrix_by_frameId(frameId-1)
+            cur_step, angle = _compute_distance(prev_pose, cur_pose)
+            steps.append(cur_step)
+            max_step_size = max(max_step_size, cur_step)
+            distance += cur_step
+            rotation += angle
+            ys.append(y)
+            xls.append(xl)
+            xrs.append(xr)
+
+        for py in range(1, len(ys)):
+            if abs(ys[py] - ys[py - 1]) > 20:
+                i = -1
+                break
+
+        for py in range(1, len(xrs)):
+            if abs(xrs[py] - xrs[py - 1]) > 50:
+                i=-1
+                break
+
+        for py in range(1, len(xls)):
+            if abs(xls[py] - xls[py - 1]) > 50:
+                i=-1
+                break
+
+        if i == -1:
+            continue
+
+        if max(8 * np.mean(steps), 8) < distance:
+            relevant_tracks.append((track_data,tid))
+            tmp.append((track_data, tid, distance))
+
     return relevant_tracks
 
+def find_all_minima(points_array: list):
+    """
+    Given an array of integers, this function will find all the minima points, and save the indices of all of them
+    in the _dips array.
+    @:param: connectivity_cmps: a list containing the number of connected components remained after different
+    thresholding applied on a CT scan
+    :return: The index of all minima points in the given input
+    """
+    minimas = np.array(points_array)
+    # Finds all local minima
+    return np.where((minimas[1:-1] < minimas[0:-2]) * (
+            minimas[1:-1] < minimas[2:]))[0]
 def triangulate_and_project(track):
     """
     Triangulate a 3D point from the last frame of the track
@@ -246,7 +363,7 @@ def compute_reprojection_errors(frameIds, points, reprojected_points, stereo_cam
         measured_point = gtsam.StereoPoint2(points[i][0], points[i][1], points[i][2])
         stereo_model_noise = gtsam.noiseModel.Isotropic.Sigma(3, 1)
         factor = gtsam.GenericStereoFactor3D(measured_point, stereo_model_noise,
-                                             cam_symbol, gtsam.symbol(POINT,0), GTSAM_K)
+                                             cam_symbol, gtsam.symbol(POINT,frameId), GTSAM_K)
         factors.append(factor)
     return factors, reprojection_errors, values
 
@@ -502,9 +619,11 @@ def q3():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = select_keyframes_by_track_max_distance(frameIds)
+    key_frames = criteria(list(frameIds.keys()), .97)
+    # key_frames = choose_key_frames_by_elapsed_time(frameIds)
+    # key_frames = select_keyframes_by_track_max_distance(frameIds)
+    # choose_key_frames_by_elapsed_time()
     bundle_windows = get_bundle_windows(key_frames)
-
     # Step 2: Solve Every Bundle Window
     num_factor_in_bundles = []
     bundle_results = []
@@ -517,6 +636,12 @@ def q3():
         initial_error = bundle_graph.error(initial_estimates)
         optimized_error = bundle_graph.error(optimized_estimates)
         print(f"initial graph error was {initial_error}, and after optimization the error is {optimized_error}")
+        fig = plt.figure(num=0)
+        ax = fig.add_subplot(projection='3d')
+        gtsam.utils.plot.plot_trajectory(fignum=0, values=optimized_estimates, title="Bundle Adjustment Trajectory")
+        gtsam.utils.plot.set_axes_equal(0)
+        ax.view_init(vertical_axis='y')
+        plt.show()
     print(f"FINISHED SOLVING BUNDLES!")
     print(f"Mean number of factors per graph is: {np.mean(num_factor_in_bundles)})")
     print(f"Min number of factors over graphs: {np.min(num_factor_in_bundles)})")
@@ -552,7 +677,7 @@ def q3():
 
     # Step 6: Presenting KeyFrame Localization Over Time
     plot_localization_error_over_time(key_frames, camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, path=PATH_TO_SAVE_LOCALIZATION_ERROR)
-
+    plt.savefig(PATH_TO_SAVE_2D_TRAJECTORY)
     # Step 7: Presenting a View From Above (in 2d) of the Scene, With Keyframes and 3d Points
     #TODO I DIDN'T PRESENT YET A VIEW FROM OF THE SCENE WITH THE 3d POINTS (I ONLY ADDED THE CAMERA LOCATIONS). I'm not sure exactly what is required
     a = 5  # for you
@@ -568,10 +693,7 @@ if __name__ == "__main__":
         track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
 
-
     q3()
+    quit()
+    # q2()
     # exit()
-    # q1()
-    exit()
-    q2()
-    exit()

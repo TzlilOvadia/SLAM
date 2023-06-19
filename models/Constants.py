@@ -1,4 +1,4 @@
-
+from numpy import pi
 #############################################
 ################# Constants #################
 #############################################
@@ -19,5 +19,14 @@ FAILURE = 1
 LOCATIONS_IDX = 1
 LAST_ITEM = -1
 FRAME_ID = -1
+ROTATION_TOLERANCE = .2
+DISTANCE_TOLERANCE = 60
+MIN_WINDOW_SIZE = 5
+MAX_DISTANCE_TOLERANCE = 150
+PERCENTILE = .97
+LARGE_ROTATION_VAR = (30 * pi / 180) ** 2
+SMALL_ROTATION_VAR = (5 * pi / 180) ** 2
+HORIZONTAL_SHIFT_TOLERANCE = 50
+VERTICAL_SHIFT_TOLERANCE = 15
 CAMERA = "c"
 POINT = "q"
