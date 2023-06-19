@@ -114,6 +114,7 @@ def select_keyframes_by_track_max_distance(frames):
     frameIds = [0]
     frameId = 1
     # while frameId < len(frames):
+
     rotation_accumulator = 0
     while frameId < 1500:
         cur_pose = track_db.get_extrinsic_matrix_by_frameId(frameId)
@@ -151,6 +152,7 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
     for track_data, trackId in relevant_tracks:
         # Check whether the track is too short
         track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
+
         track_starts_in_frame_id = track_data[0][FRAME_ID]
         if track_ends_in_frame_id < bundle_ends_in_frame_id:
             continue
@@ -620,9 +622,7 @@ def q3():
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
     key_frames = criteria(list(frameIds.keys()), .97)
-    # key_frames = choose_key_frames_by_elapsed_time(frameIds)
-    # key_frames = select_keyframes_by_track_max_distance(frameIds)
-    # choose_key_frames_by_elapsed_time()
+
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window
     num_factor_in_bundles = []
@@ -697,3 +697,4 @@ if __name__ == "__main__":
     quit()
     # q2()
     # exit()
+
