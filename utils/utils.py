@@ -202,3 +202,15 @@ def array_to_dict(arr):
         value = arr[1, i]
         dict_obj[key] = value
     return dict_obj
+
+
+def find_all_minima(points_array: list):
+    """
+    Given an array of integers, this function will find all the minima points indices
+    @:param: points_array: a list containing the number of 1D points
+    :return: The index of all minima points in the given input
+    """
+    minimas = np.array(points_array)
+    # Finds all local minima
+    return np.where((minimas[1:-1] < minimas[0:-2]) * (
+            minimas[1:-1] < minimas[2:]))[0]

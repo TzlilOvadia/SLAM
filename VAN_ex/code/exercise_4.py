@@ -51,9 +51,9 @@ def track_camera_for_many_images(thresh=0.4):
 
         kp1, kp2 = matcher.get_kp(idx=frameId + 1)
         Rt, inliers_ratio = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
-                            debug=False, max_iterations=500)
+                            debug=False, max_iterations=800)
         track_db.add_inliers_ratio(frameId, inliers_ratio)
-        track_db.add_inliers_ratio(frameId, Rt)
+        # track_db.add_inliers_ratio(frameId, Rt)
         R, t = Rt[:, :-1], Rt[:, -1]
         new_R = R @ extrinsic_matrices[frameId][:, :-1]
         new_t = R @ extrinsic_matrices[frameId][:, -1] + t
@@ -94,6 +94,11 @@ def get_3d_points_cloud(inlier_indices_mapping, k, m1, m2, matcher, file_index=0
         x1, y1 = kp1[ind_1].pt
         x2, y2 = kp2[ind_2].pt
         our_sol = least_squares((x1, y1), (x2, y2), k @ m1, k @ m2)
+        if our_sol[-1] <= 0 or x1 < x2:
+            continue
+
+        if abs(y1-y2)>2:
+            print(f"y1-y2: {y1-y2} for y1: {y1}, y2:{y2}")
         inlier_points_in_3d.append(our_sol)
         ind_to_3d_point_dict[ind_1] = our_sol
     if debug:
@@ -146,14 +151,7 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
         cur_left_kp = m.trainIdx
 
         if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping:
-            trackId = track_db.get_kp_trackId(prev_left_kp, frameId)
 
-            #  Every consnsused match is assigned as a new track with length of 2.
-            #  We start by appending the prev_left_ind, cur_left_ind to each track
-            #  -->> [] is updated to [prev_left_ind, cur_left_ind]
-
-            if trackId is None:
-                trackId = track_db.generate_new_track_id()
 
             xl, yl = matcher.get_feature_location_frame(frameId, kp=prev_left_kp, loc=LEFT)
             xr, yr = matcher.get_feature_location_frame(frameId, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
@@ -163,6 +161,20 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
 
             feature_location_prev = (xl, xr, yl)
             feature_location_cur = (xl_n, xr_n, yl_n)
+            trackId = track_db.get_kp_trackId(prev_left_kp, frameId)
+
+            #  Every consnsused match is assigned as a new track with length of 2.
+            #  We start by appending the prev_left_ind, cur_left_ind to each track
+            #  -->> [] is updated to [prev_left_ind, cur_left_ind]
+            prev_left_ind = prev_left_kp
+
+
+            try:
+                point_3d_prev = ind_to_3d_point_prev[prev_left_ind]
+            except KeyError:
+                continue
+            if trackId is None:
+                trackId = track_db.generate_new_track_id()
 
             track_db.add_track(trackId, frameId, feature_location_prev, feature_location_cur, prev_left_kp, cur_left_kp)
 
@@ -205,14 +217,15 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
     num_points_for_model = 4
     best_num_of_supporters = 0
     best_candidate_supporters_boolean_array = []
-    epsilon = 0.999
+    epsilon = 0.99
     I = max_iterations
     i = 0
-    while i < I:
+    while i < I and epsilon != 0:
         # for i in range(max_iterations):
         candidate_4_points = random.sample(points_to_choose_from, k=num_points_for_model)
-        candidate_Rt = solvePnP(kp_left, candidate_4_points, intrinsic_matrix, flags=cv2.SOLVEPNP_P3P)
+        candidate_Rt = solvePnP(kp_left, candidate_4_points, intrinsic_matrix, flags=cv2.SOLVEPNP_AP3P)
         if candidate_Rt is None:
+            print(i)
             i += 1
             continue
         are_supporters_boolean_array, num_good_matches = find_supporters(candidate_Rt, right_camera_matrix,
@@ -220,19 +233,19 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
                                                                          kp_left=kp_left, kp_right=kp_right,
                                                                          thresh=thresh, debug=debug)
 
-        if num_good_matches >= best_num_of_supporters:
+        if num_good_matches > best_num_of_supporters:
             best_4_points_candidate = candidate_4_points
             best_candidate_supporters_boolean_array = are_supporters_boolean_array
             best_Rt_candidate = candidate_Rt
             best_num_of_supporters = num_good_matches
-        epsilon = min(epsilon, 1 - (num_good_matches / len(are_supporters_boolean_array)))
-        I = min(ransac_num_of_iterations(epsilon), max_iterations)
+        epsilon = min(1 - (num_good_matches / len(are_supporters_boolean_array)), .99)
+        I = min(ransac_num_of_iterations(epsilon, 0.99), max_iterations)
         print(f"at iteration {i} I={I}")
         i += 1
     # We now refine the winner by calculating a transformation for all the supporters/inliers
     supporters = [point_to_choose for ind, point_to_choose in enumerate(points_to_choose_from) if
                   best_candidate_supporters_boolean_array[ind]]
-    refined_Rt = solvePnP(kp_left, supporters, intrinsic_matrix, flags=0)
+    refined_Rt = solvePnP(kp_left, supporters, intrinsic_matrix, flags=cv2.SOLVEPNP_AP3P)
     if refined_Rt is None:
         refined_Rt = best_Rt_candidate
     _, num_good_matches = find_supporters(refined_Rt, right_camera_matrix, points_to_choose_from, intrinsic_matrix,
@@ -253,7 +266,7 @@ def apply_Rt_transformation(list_of_3d_points, Rt):
     return list_of_transformed_points
 
 
-def ransac_num_of_iterations(epsilon=0.001, p=0.999, s=4):
+def ransac_num_of_iterations(epsilon=0.99, p=0.99, s=4):
     if epsilon == 0:
         return 0
     return int(np.ceil(np.log(1 - p) / np.log(1 - (1 - epsilon) ** s)))
@@ -410,8 +423,8 @@ def q7(path, length=10):
 
 if __name__ == "__main__":
     PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
-    track_db = TrackDatabase()
-    deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
+    # track_db = TrackDatabase()
+    # deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
     # if deserialization_result == FAILURE:
     _, track_db = track_camera_for_many_images()
     track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
