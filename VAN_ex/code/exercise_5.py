@@ -73,7 +73,7 @@ def choose_key_frames_by_elapsed_time(frameIds):
     return key_frames
 
 
-def choose_key_frames_by_tracks_count_median(frameIds, percentage=.9):
+def choose_key_frames_by_tracks_count_median(frameIds, percentage=.82):
     """
     choosing proper keyframes using a median criterion
     """
@@ -171,7 +171,7 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
 
         last_point3 = last_frame_pose.backproject(last_point2)
 
-        if last_point3[2] <= 0 or last_point3[2] >= MAX_DISTANCE_TOLERANCE or last_loc[0] < last_loc[1]:
+        if last_point3[2] <= 0 or last_point3[2] >= 150:
             continue
 
         point_symbol = gtsam.symbol(POINT, trackId)
@@ -213,7 +213,7 @@ def init_factor_graph_variables(track_db, bundle_ends_in_frame_id, bundle_starts
         frameId_to_cam_pose[frameId] = cam_pose
         if i == 0:
             # Add prior factor for the first frame
-            s= np.array([(30 * np.pi / 180) ** 2,(30 * np.pi / 180) ** 2,(1 * np.pi / 180) ** 2]  + [1.0, 0.01, 1.0])
+            s= np.array([(30 * np.pi / 180) ** 2,(30 * np.pi / 180) ** 2,(1 * np.pi / 180) ** 2]  + [.1, 0.01, 1.0])
             prior_noise = gtsam.noiseModel.Diagonal.Sigmas(s)
             factor_graph.add(gtsam.PriorFactorPose3(cam_pose_sym, cam_pose, prior_noise))
     return frameId_to_cam_pose, factor_graph, initial_estimates
@@ -224,23 +224,22 @@ def criteria(frames, percentage):
     """
     key_frames = [0]
     n = len(frames)
-    # while key_frames[-1] < 1800:
     while key_frames[-1] < len(frames)-1:
         last_key_frame = key_frames[-1]
         frame = frames[last_key_frame]
         tracks = track_db.get_track_ids_for_frame(frame)
 
-
+        
         tracks_by_lengths = sorted([track_db.get_track_data(trackId)[-1][FRAME_ID] for trackId in tracks])
         new_key_frame = tracks_by_lengths[int(len(tracks_by_lengths) * percentage)]
         distance, rotation = 0,0
-        for fid in range(frame+1, new_key_frame):
+        for fid in range(frame, new_key_frame):
             cur_pose = track_db.get_extrinsic_matrix_by_frameId(frame)
             prev_pose = track_db.get_extrinsic_matrix_by_frameId(frame - 1)
             cur_step, angle = _compute_distance(prev_pose, cur_pose)
             distance += cur_step
             rotation += angle
-            if (abs(rotation) > 0.2 or abs(distance) > 80) and (fid - frame) > 6:
+            if (abs(rotation) > 0.3 or abs(distance) > 80) and (fid - frame) > 4:
                 new_key_frame = fid
                 break
 
@@ -252,9 +251,9 @@ def criteria(frames, percentage):
 def get_only_relevant_tracks(track_db, frame_id):
     tracksIds = set()
     tracksIds.update(set(track_db.get_track_ids_for_frame(frame_id)))
-    tracks = [(track_db.get_track_data(trackId), trackId) for trackId in tracksIds if 1 < len(track_db.get_track_data(trackId))]
+    # tracks = [(track_db.get_track_data(trackId), trackId) for trackId in tracksIds if 2 < len(track_db.get_track_data(trackId))]
+    tracks = [(track_db.get_track_data(trackId), trackId) for trackId in tracksIds]
     relevant_tracks=[]
-    tmp = []
 
     for track_data,tid in tracks:
         distance, rotation = 0,0
@@ -268,7 +267,7 @@ def get_only_relevant_tracks(track_db, frame_id):
         for frameId in range(track_data[0][FRAME_ID], track_data[-1][FRAME_ID]+1):
             xl,xr,y = track_data[i][LOCATIONS_IDX]
             i+=1
-            if xl < xr :
+            if xl <= xr :
                 i=-1
                 break
             cur_pose = track_db.get_extrinsic_matrix_by_frameId(frameId)
@@ -281,43 +280,31 @@ def get_only_relevant_tracks(track_db, frame_id):
             ys.append(y)
             xls.append(xl)
             xrs.append(xr)
-
-        for py in range(1, len(ys)):
-            if abs(ys[py] - ys[py - 1]) > 20:
-                i = -1
-                break
-
-        for py in range(1, len(xrs)):
-            if abs(xrs[py] - xrs[py - 1]) > 50:
-                i=-1
-                break
-
-        for py in range(1, len(xls)):
-            if abs(xls[py] - xls[py - 1]) > 50:
-                i=-1
-                break
+        #
+        # for py in range(1, len(ys)):
+        #     if abs(ys[py] - ys[py - 1]) > 100:
+        #         i = -1
+        #         break
+        # #
+        # for py in range(1, len(xrs)):
+        #     if abs(xrs[py] - xrs[py - 1]) > 100:
+        #         i=-1
+        #         break
+        #
+        # for py in range(1, len(xls)):
+        #     if abs(xls[py] - xls[py - 1]) > 100:
+        #         i=-1
+        #         break
 
         if i == -1:
             continue
 
-        if max(8 * np.mean(steps), 8) < distance:
-            relevant_tracks.append((track_data,tid))
-            tmp.append((track_data, tid, distance))
+        # if max(3 * np.mean(steps), 8) < distance:
+        relevant_tracks.append((track_data,tid))
 
     return relevant_tracks
 
-def find_all_minima(points_array: list):
-    """
-    Given an array of integers, this function will find all the minima points, and save the indices of all of them
-    in the _dips array.
-    @:param: connectivity_cmps: a list containing the number of connected components remained after different
-    thresholding applied on a CT scan
-    :return: The index of all minima points in the given input
-    """
-    minimas = np.array(points_array)
-    # Finds all local minima
-    return np.where((minimas[1:-1] < minimas[0:-2]) * (
-            minimas[1:-1] < minimas[2:]))[0]
+
 def triangulate_and_project(track):
     """
     Triangulate a 3D point from the last frame of the track
@@ -621,7 +608,7 @@ def q3():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .97)
+    key_frames = criteria(list(frameIds.keys()), .85)
 
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window
