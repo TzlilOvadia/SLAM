@@ -14,9 +14,9 @@ from matplotlib import pyplot as plt
 from models.Constants import *
 
 
-def track_camera_for_many_images(thresh=0.4):
+def track_camera_for_many_images(thresh=0.6):
     k, m1, m2 = utils.read_cameras()
-    matcher = Matcher(display=VERTICAL_REPRESENTATION)
+    matcher = Matcher(algo=cv2.AKAZE_create(),display=VERTICAL_REPRESENTATION)
     num_of_frames = 2560
     extrinsic_matrices = np.zeros(shape=(num_of_frames, 3, 4))
     camera_positions = np.zeros(shape=(num_of_frames, 3))
@@ -51,7 +51,7 @@ def track_camera_for_many_images(thresh=0.4):
 
         kp1, kp2 = matcher.get_kp(idx=frameId + 1)
         Rt, inliers_ratio = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
-                            debug=False, max_iterations=800)
+                            debug=False, max_iterations=1000)
         track_db.add_inliers_ratio(frameId, inliers_ratio)
         # track_db.add_inliers_ratio(frameId, Rt)
         R, t = Rt[:, :-1], Rt[:, -1]
@@ -75,13 +75,16 @@ def match_next_pair(cur_file, matcher):
 
 def find_stereo_matches(matcher, file_index):
     matcher.detect_and_compute(file_index)
-    matcher.find_matching_features(with_significance_test=False)
+    matcher.find_matching_features(with_significance_test=True)
     matches = matcher.get_matches(file_index)
+    filtered_matches = matcher.get_filtered_matches(file_index)
+
     kp1, kp2 = matcher.get_kp(file_index)
-    x1, y1, x2, y2, indices_mapping = utils.coords_from_kps(matches, kp1, kp2)
+
+    x1, y1, x2, y2, indices_mapping = utils.coords_from_kps(filtered_matches, kp1, kp2)
     # Apply rectified stereo pattern on the matches
     img1in, img2in, img1out, img2out, inlier_indices_mapping = rectificatied_stereo_pattern(y1, y2, indices_mapping,
-                                                                                            thresh=1)
+                                                                                            thresh=2)
     matcher.filter_matches(img1in, file_index)
     return inlier_indices_mapping
 
@@ -239,13 +242,13 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
             best_Rt_candidate = candidate_Rt
             best_num_of_supporters = num_good_matches
         epsilon = min(1 - (num_good_matches / len(are_supporters_boolean_array)), .99)
-        I = min(ransac_num_of_iterations(epsilon, 0.99), max_iterations)
+        I = min(ransac_num_of_iterations(epsilon, 0.999), max_iterations)
         print(f"at iteration {i} I={I}")
         i += 1
     # We now refine the winner by calculating a transformation for all the supporters/inliers
     supporters = [point_to_choose for ind, point_to_choose in enumerate(points_to_choose_from) if
                   best_candidate_supporters_boolean_array[ind]]
-    refined_Rt = solvePnP(kp_left, supporters, intrinsic_matrix, flags=cv2.SOLVEPNP_AP3P)
+    refined_Rt = solvePnP(kp_left, supporters, intrinsic_matrix, flags=cv2.SOLVEPNP_ITERATIVE)
     if refined_Rt is None:
         refined_Rt = best_Rt_candidate
     _, num_good_matches = find_supporters(refined_Rt, right_camera_matrix, points_to_choose_from, intrinsic_matrix,

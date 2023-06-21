@@ -8,10 +8,12 @@ from models.TrackDatabase import TrackDatabase
 from utils.utils import read_images
 from utils.plotters import draw_matches
 # noinspection PyUnresolvedReferences
+FILTERED_MATCHES = "FILTERED_MATCHES"
+
 
 class Matcher:
     """A class for matching features between two images using a specified algorithm and matcher."""
-    def __init__(self, algo=cv2.SIFT_create(), matcher=cv2.BFMatcher(), file_index=0, threshold=.2, display=HORIZONTAL_REPRESENTATION):
+    def __init__(self, algo=cv2.SIFT_create(), matcher=cv2.BFMatcher(), file_index=0, threshold=.6, display=HORIZONTAL_REPRESENTATION):
         """
         Initialize a Matcher object with an algorithm, a matcher, and a file index.
         :param algo: A cv2 algorithm object (e.g. cv2.SIFT_create(), cv2.AKAZE_create(), cv2.ORB_create()).
@@ -30,6 +32,8 @@ class Matcher:
         self.threshold = threshold
         self._img1, self._img2 = None, None
         self.read_images(idx=file_index)
+        self._filtered_matches = None
+
         self._img1_kp, self._img1_dsc = None, None
         self._img2_kp, self._img2_dsc = None, None
         self._matches = None
@@ -53,6 +57,15 @@ class Matcher:
         if idx is None:
             return self._matches
         return self.cache[idx][MATCHES]
+
+    def get_filtered_matches(self, idx=None) -> np.ndarray:
+        if idx is None:
+            return self._filtered_matches
+        return self.cache[idx][FILTERED_MATCHES]
+
+
+    def set_matches(self, matches, idx=None):
+        self.cache[idx][MATCHES] = matches
 
     def get_kp(self, idx=None):
         if idx is None:
@@ -119,12 +132,21 @@ class Matcher:
             matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=2)
             self._matches = matches
             self.apply_threshold(debug)
+            # Retrieve keypoints and descriptors for filtered matches
+            # self._img1_kp = [self._img1_kp[m[0].queryIdx] for m in self._matches]
+            # self._img2_kp = [self._img2_kp[m[0].trainIdx] for m in self._matches]
+            # self.cache[self._file_index][LEFT] = self._img1_kp
+            # self.cache[self._file_index][RIGHT]=self._img2_kp
+            # descriptors1 = np.array([self._img1_dsc[m[0].queryIdx] for m in self._matches])
+            # descriptors2 = np.array([self._img2_dsc[m[0].trainIdx] for m in self._matches])
+
 
         else:
             matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=1)
             self._matches = matches
 
         self.cache[self._file_index][MATCHES] = self._matches
+        self.cache[self._file_index][FILTERED_MATCHES] = self._filtered_matches
 
 
     def apply_threshold(self, debug=False):
@@ -138,7 +160,8 @@ class Matcher:
                 filtered.append([m])
         if debug:
             print(f"When applying significance test with threshold {self.threshold}, out of {len(self._matches)} matches {len(filtered)} matches remained")
-        self._matches = filtered
+        self._filtered_matches = filtered
+        self.cache[self._file_index][FILTERED_MATCHES] = filtered
 
     def filter_matches(self, indices, file_index):
         """
@@ -161,7 +184,7 @@ class Matcher:
         return filtered
 
 
-    def match_between_consecutive_frames(self, prev_frame_index, cur_frame_index, thresh=0.1, debug=False):
+    def match_between_consecutive_frames(self, prev_frame_index, cur_frame_index, thresh=0.6, debug=False):
         """
         given to frames indices, this function will compute their matching points and cache it.
         :param prev_frame_index:
@@ -176,6 +199,8 @@ class Matcher:
         matches = self.matcher.knnMatch(prev_dsc, cur_dsc, k=2)
         filtered = Matcher.apply_thresholds(matches, thresh)
         self.cache[cur_frame_index][CONSECUTIVE] = filtered
+
+
         if debug:
             draw_matches(filtered, prev_im1, cur_im1, prev_kps, cur_kps, num_of_matches=5000, debug=debug, display=VERTICAL_REPRESENTATION)
         return filtered

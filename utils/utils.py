@@ -12,7 +12,6 @@ DATA_PATH = WINDOWS_OS_PATH if os.name == 'nt' else MAC_OS_PATH
 WINDOWS_GT_PATH = "../dataset/poses/05.txt"
 
 
-
 def read_images(idx) -> (np.ndarray, np.ndarray):
     """
     Read two images (img1 and img2) given an index and assign them to the Matcher object.
@@ -202,6 +201,52 @@ def array_to_dict(arr):
         value = arr[1, i]
         dict_obj[key] = value
     return dict_obj
+
+import cv2
+import numpy as np
+
+def select_good_matches(keypoints1, keypoints2, matches, reprojection_threshold=3.0, inlier_ratio_threshold=0.1):
+    # Convert keypoints to numpy arrays
+    keypoints1_np = np.array([kp.pt for kp in keypoints1], dtype=np.float32)
+    keypoints2_np = np.array([kp.pt for kp in keypoints2], dtype=np.float32)
+
+    # Convert matches to arrays of point indices
+    src_pts = np.array([keypoints1_np[m[0].queryIdx] for m in matches], dtype=np.float32).reshape(-1, 1, 2)
+    dst_pts = np.array([keypoints2_np[m[0].trainIdx] for m in matches], dtype=np.float32).reshape(-1, 1, 2)
+
+    # Estimate fundamental matrix using RANSAC
+    _, mask = cv2.findFundamentalMat(src_pts, dst_pts, cv2.RANSAC, reprojection_threshold)
+    k, m1, m2 = read_cameras()
+    disparities = np.abs(src_pts[:, 0, 0] - dst_pts[:, 0, 0])
+
+    disparity_thresh = np.median(disparities)
+
+    # Compute reprojection error for inlier matches
+    reprojection_errors = []
+    inlier_matches = []
+    for i, m in enumerate(matches):
+        if mask[i] == 1:
+            src_pt = src_pts[i, 0]
+            dst_pt = dst_pts[i, 0]
+            if abs(src_pt[1]-dst_pt[1]) > 1:
+                print(src_pt[1]-dst_pt[1])
+                continue
+            # F = cv2.findFundamentalMat(np.array([src_pt]), np.array([dst_pt]), cv2.FM_8POINT)[0]
+            pts_3d = cv2.triangulatePoints(k @ m1, k @ m2, dst_pt,src_pt)
+            pts_3d /= pts_3d[3]
+            reprojection_error = np.linalg.norm(pts_3d[:2] - dst_pt)
+            reprojection_errors.append(reprojection_error)
+            inlier_matches.append(m)
+    reprojection_error_threshold = np.median(reprojection_errors)
+    # Compute inlier ratio
+
+    # Select good matches based on reprojection error and inlier ratio thresholds
+    good_matches = []
+    for error, match, disparity in zip(reprojection_errors, inlier_matches, disparities):
+        if error <= reprojection_error_threshold and disparity < disparity_thresh:
+            good_matches.append(match)
+
+    return good_matches
 
 
 def find_all_minima(points_array: list):
