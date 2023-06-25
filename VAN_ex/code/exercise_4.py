@@ -304,7 +304,7 @@ def visualize_track(track, num_to_show=10):
         _, feature_location, frameId = track_point
         x_l, x_r, y = feature_location
         left_image, right_image = read_images(frameId)
-        plot_regions_around_matching_pixels(left_image, right_image, x_l, y, x_r, y, frame_index=frameId)
+        plot_regions_around_matching_pixels(left_image, right_image, x_l, y, x_r, y, frame_index=frameId, path=f"debug_track{frameId}")
 
 # ------------------------------------------ANSWERS TO EXERCISE QUESTIONS ---------------------------------------
 

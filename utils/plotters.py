@@ -68,6 +68,18 @@ def plot_trajectories(camera_positions, gt_camera_positions, path=""):
         plt.show()
 
 
+def plot_2d_cameras_and_points(cameras_x, cameras_z, points_x, points_z, path=""):
+    plt.figure()
+    plt.scatter(x=cameras_x, y=cameras_z, color='blue', label="camera locations")
+    plt.scatter(x=points_x, y=points_z, color='orange', label="landmarks")
+    plt.title("Camera and Landmarks Locations")
+    plt.legend()
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
+
+
 def draw_supporting_matches(file_index, matcher, matches, supporting_indices):
     """
        Draws supporting matches between key-points in two consecutive images.
@@ -299,7 +311,7 @@ def plot_four_cameras(Rt, m2):
     a=5
 
 
-def plot_regions_around_matching_pixels(left, right, x1, y1, x2, y2, frame_index):
+def plot_regions_around_matching_pixels(left, right, x1, y1, x2, y2, frame_index, path=""):
     left, right = left.copy(), right.copy()
     x1 = int(x1)
     y1 = int(y1)
@@ -353,7 +365,10 @@ def plot_regions_around_matching_pixels(left, right, x1, y1, x2, y2, frame_index
     # Adjust the spacing between subplots
     fig.tight_layout()
     # Display the plot
-    plt.show()
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
 
 
 def plot_dict(d, x_title='', y_title='', title=''):
