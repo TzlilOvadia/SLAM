@@ -214,7 +214,7 @@ def init_factor_graph_variables(track_db, bundle_ends_in_frame_id, bundle_starts
         frameId_to_cam_pose[frameId] = cam_pose
         if i == 0:
             # Add prior factor for the first frame
-            s= 0.1*np.array([(3 * np.pi / 180) ** 2,(3 * np.pi / 180) ** 2,(3 * np.pi / 180) ** 2]  + [.1, 0.01, 1.0])
+            s= 0.1*np.array([(3 * np.pi / 180),(3 * np.pi / 180),(3 * np.pi / 180)] + [.1, 0.01, 1.0])
             prior_noise = gtsam.noiseModel.Diagonal.Sigmas(s)
             factor_graph.add(gtsam.PriorFactorPose3(cam_pose_sym, cam_pose, prior_noise))
     return frameId_to_cam_pose, factor_graph, initial_estimates

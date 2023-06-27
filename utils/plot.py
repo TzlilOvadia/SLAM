@@ -418,6 +418,7 @@ def plot_trajectory(
     axes.view_init(vertical_axis='y')
     fig.savefig(save_file)
 
+    print(f"saved file: {save_file}")
 
 def plot_incremental_trajectory(fignum: int,
                                 values: Values,

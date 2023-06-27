@@ -115,7 +115,7 @@ def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_
     first_camera_pose = optimized_global_keyframes_poses[0]
     c0 = gtsam.symbol(CAMERA, bundle_window[0])
     landmarks.add(c0)
-    s = 0.1 * np.array([(30 * np.pi / 180) ** 2, (30 * np.pi / 180) ** 2, (1 * np.pi / 180) ** 2] + [.1, 0.01, 1.0])
+    s = np.array([1/18,1/18,.1/18] + [.1, 0.01, 1.0]) * 0.1
     prior_noise = gtsam.noiseModel.Diagonal.Sigmas(s)
     pose_graph.add(gtsam.PriorFactorPose3(c0, first_camera_pose, prior_noise))
     initial_estimates.insert(c0, first_camera_pose)
@@ -132,7 +132,7 @@ def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_
 
         #relative_pose = get_relative_pose_between_frames(bundle_window[0], bundle_window[1], optimized_estimates)
         relative_pose = rel_poses_lst[i]
-        noise_cov = gtsam.noiseModel.Gaussian.Covariance(0.0000001 * rel_cov_mat_lst[i])
+        noise_cov = gtsam.noiseModel.Gaussian.Covariance(rel_cov_mat_lst[i] *.1)
         pose_factor = gtsam.BetweenFactorPose3(c0, c1, relative_pose, noise_cov)
         pose_graph.add(pose_factor)
 
@@ -142,7 +142,6 @@ def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_
 def q2(force_recompute=False, debug=True):
     PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
     # Step 1: get bundle adjustment results
-    track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, cond_matrices = load_bundle_results(path=PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS, force_recompute=force_recompute, debug=debug)
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     print("Creating Pose Graph...")
@@ -168,54 +167,6 @@ def q2(force_recompute=False, debug=True):
                          title="q2_optimized_estimates_trajectory_with_cov", scale=1,
                          save_file="ex6_q2_optimized_estimates_trajectory_with_cov")
 
-    a=5
-
-    ######################################  PLOTS   ################################################
-
-
-    # Plot initial estimate trajectory
-    # initial_cameras = np.array([initial_estimates.atPose3(gtsam.symbol(CAMERA,frameId)) for frameId in key_frames])  # List of gtsam.Pose3 objects representing poses
-    # x_coordinates = [pose.x() for pose in initial_cameras]
-    # y_coordinates = [pose.y() for pose in initial_cameras]
-    # z_coordinates = [pose.z() for pose in initial_cameras]
-    # fig = plt.figure(num=0)
-    # ax=fig.add_subplot(projection='3d')
-    # gtsam.utils.plot.plot_trajectory(fignum=0, values=initial_estimates, title="q2_initial_estimates_trajectory")
-    # gtsam.utils.plot.set_axes_equal(0)
-    # ax.set_title(f"initial estimates trajectory without covariance")
-    # ax.scatter(x_coordinates, y_coordinates,z_coordinates, s=1)
-    # ax.view_init(vertical_axis='y')
-    # plt.savefig("ex6_q2_initial_estimates_trajectory")
-    #
-    #
-    # # Plot optimized trajectory without covariance
-    # optimized_cameras = np.array([optimized_estimates.atPose3(gtsam.symbol(CAMERA,frameId)) for frameId in key_frames])  # List of gtsam.Pose3 objects representing poses
-    # x_coordinates = [pose.x() for pose in optimized_cameras]
-    # y_coordinates = [pose.y() for pose in optimized_cameras]
-    # z_coordinates = [pose.z() for pose in optimized_cameras]
-    # fig = plt.figure(num=0)
-    # ax=fig.add_subplot(projection='3d')
-    # gtsam.utils.plot.plot_trajectory(fignum=0, values=optimized_estimates, title="q2_optimized_estimates_trajectory")
-    # gtsam.utils.plot.set_axes_equal(0)
-    # ax.set_title(f"optimized estimates trajectory without covariance")
-    # ax.scatter(x_coordinates, y_coordinates,z_coordinates, s=1)
-    # ax.view_init(vertical_axis='y')
-    # plt.savefig("ex6_q2_optimized_estimates_trajectory")
-    #
-    # # Plot optimized trajectory with covariance
-    # marginals = gtsam.Marginals(pose_graph, optimized_estimates)
-    # fig = plt.figure(num=0)
-    # ax=fig.add_subplot(projection='3d')
-    # gtsam.utils.plot.plot_trajectory(fignum=0, values=optimized_estimates, marginals=marginals, title="q2_optimized_estimates_trajectory_with_cov")
-    # gtsam.utils.plot.set_axes_equal(0)
-    # ax.set_title(f"optimized estimates trajectory trajectory with covariance")
-    # ax.scatter(x_coordinates, y_coordinates,z_coordinates, s=1)
-    # ax.view_init(vertical_axis='y')
-    # plt.savefig("ex6_q2_optimized_estimates_trajectory_with_cov")
-
-
-
-    a=5
 
 
 def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, track_db = None):
@@ -315,8 +266,8 @@ if __name__ == '__main__':
 
     # solve exercise questions
     q1()
-    exit()
     q2(force_recompute=False, debug=True)
+    exit()
 
 
 
