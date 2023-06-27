@@ -186,7 +186,7 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
             measured_point2 = gtsam.StereoPoint2(location[0], location[1], location[2])
 
             # Create the factor between the measured and projected points
-            stereomodel_noise = gtsam.noiseModel.Isotropic.Sigma(3,1.0)
+            stereomodel_noise = gtsam.noiseModel.Isotropic.Sigma(3,0.1)
             factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, cam_symbol, point_symbol, GTSAM_K)
 
             # Add the factor to the factors list
@@ -214,12 +214,12 @@ def init_factor_graph_variables(track_db, bundle_ends_in_frame_id, bundle_starts
         frameId_to_cam_pose[frameId] = cam_pose
         if i == 0:
             # Add prior factor for the first frame
-            s= np.array([(30 * np.pi / 180) ** 2,(30 * np.pi / 180) ** 2,(1 * np.pi / 180) ** 2]  + [.1, 0.01, 1.0])
+            s= 0.1*np.array([(3 * np.pi / 180) ** 2,(3 * np.pi / 180) ** 2,(3 * np.pi / 180) ** 2]  + [.1, 0.01, 1.0])
             prior_noise = gtsam.noiseModel.Diagonal.Sigmas(s)
             factor_graph.add(gtsam.PriorFactorPose3(cam_pose_sym, cam_pose, prior_noise))
     return frameId_to_cam_pose, factor_graph, initial_estimates
 
-def criteria(frames, percentage):
+def criteria(frames, percentage, track_db):
     """
     Choose keyframes by the median track len's from the last frame
     """
@@ -492,7 +492,7 @@ def solve_one_bundle(track_db, bundle_window, debug=True):
     # Perform Bundle Adjustment Optimization
     optimizer = gtsam.LevenbergMarquardtOptimizer(bundle_graph, initial_estimates)
     optimized_estimates = optimizer.optimize()
-
+    bundle_covariance = gtsam.Marginals(bundle_graph, optimized_estimates)
     # Print Total Factor Graph Error
     if debug:
         initial_error = bundle_graph.error(initial_estimates)
@@ -500,7 +500,7 @@ def solve_one_bundle(track_db, bundle_window, debug=True):
         print("Initial Total Factor Graph Error:", initial_error)
         print("Optimized Total Factor Graph Error:", optimized_error)
 
-    return bundle_graph, initial_estimates, landmarks, optimized_estimates
+    return bundle_graph, initial_estimates, landmarks, optimized_estimates, bundle_covariance
 
 
 def q2():
@@ -517,7 +517,7 @@ def q2():
 
     # Step 2: Define Bundle Optimization
     first_bundle = bundle_windows[0]
-    bundle_graph, initial_estimates, landmarks, optimized_estimates = solve_one_bundle(track_db,first_bundle,debug=True)
+    bundle_graph, initial_estimates, landmarks, optimized_estimates, bundle_covariance = solve_one_bundle(track_db,first_bundle,debug=True)
 
     landmarks_x = np.array([optimized_estimates.atPoint3(lm_sym)[0] for lm_sym in landmarks])
     landmarks_y = np.array([optimized_estimates.atPoint3(lm_sym)[1] for lm_sym in landmarks])
@@ -588,7 +588,7 @@ def q3():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .85)
+    key_frames = criteria(list(frameIds.keys()), .85, track_db)
 
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window
@@ -596,7 +596,7 @@ def q3():
     bundle_results = []
     for i, bundle_window in enumerate(bundle_windows):
         print(f"----------------Solving bundle # {i} from frame {bundle_window[0]} to frame {bundle_window[1]}------------------")
-        bundle_graph, initial_estimates, landmarks, optimized_estimates = solve_one_bundle(track_db, bundle_window, debug=False)
+        bundle_graph, initial_estimates, landmarks, optimized_estimates, bundle_covariance = solve_one_bundle(track_db, bundle_window, debug=False)
         bundle_results.append((i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates))
         num_factor_in_bundles.append(bundle_graph.size())
         print(f"number of factors in graph is {num_factor_in_bundles[-1]}")
@@ -629,18 +629,24 @@ def q3():
     estimated_camera_position = optimized_estimates.atPose3(gtsam.symbol(CAMERA, bundle_window[0]))
     optimized_global_keyframes_poses.append(estimated_camera_position)
     #optimized_global_keyframes_poses.append(gtsam.Pose3())  # Initialize with first camera pose
+    global_3d_points = []
     for bundle_res in bundle_results:
         i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = bundle_res
         estimated_camera_position = optimized_estimates.atPose3(gtsam.symbol(CAMERA, bundle_window[1]))  # transforms from end of bundle to its beginning
         optimized_relative_keyframes_poses.append(estimated_camera_position)
         previous_global_pose = optimized_global_keyframes_poses[-1]  # transforms from beginning of bundle to global world
         current_global_pose = previous_global_pose * estimated_camera_position # transforms from end of bundle to global world
+        bundle_3d_points = gtsam.utilities.extractPoint3(optimized_estimates)
+        for point in bundle_3d_points:
+            global_point = previous_global_pose.transformFrom(gtsam.Point3(point))
+            global_3d_points.append(global_point)
         optimized_global_keyframes_poses.append(current_global_pose)
 
     # Step 5: Compare Our Results With The Ground Truth Trajectory
+    global_3d_points_numpy = np.array(global_3d_points)
     global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_global_keyframes_poses])
     gt_camera_positions = get_gt_trajectory()[np.array(key_frames)]
-    plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+    plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, points_3d=global_3d_points_numpy, path=PATH_TO_SAVE_COMPARISON_TO_GT)
 
     # Step 6: Presenting KeyFrame Localization Over Time
     plot_localization_error_over_time(key_frames, camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, path=PATH_TO_SAVE_LOCALIZATION_ERROR)
@@ -648,6 +654,77 @@ def q3():
     # Step 7: Presenting a View From Above (in 2d) of the Scene, With Keyframes and 3d Points
     #TODO I DIDN'T PRESENT YET A VIEW FROM OF THE SCENE WITH THE 3d POINTS (I ONLY ADDED THE CAMERA LOCATIONS). I'm not sure exactly what is required
     a = 5  # for you
+
+
+def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None):
+    PATH_TO_SAVE_COMPARISON_TO_GT = "q3_compare_to_ground_truth"
+    PATH_TO_SAVE_LOCALIZATION_ERROR = "q3_localization_error"
+    PATH_TO_SAVE_2D_TRAJECTORY = "q3_2d_view_of_the_entire_scene"
+
+    # Step 1: Select Keyframes
+    track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
+    frameIds = track_db.get_frameIds()
+    key_frames = criteria(list(frameIds.keys()), .85, track_db)
+
+    bundle_windows = get_bundle_windows(key_frames)
+    # Step 2: Solve Every Bundle Window
+    num_factor_in_bundles = []
+    bundle_results = []
+    for i, bundle_window in enumerate(bundle_windows):
+
+        bundle_graph, initial_estimates, landmarks, optimized_estimates, marginals = solve_one_bundle(track_db, bundle_window, debug=False)
+        bundle_results.append((i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates, marginals))
+        num_factor_in_bundles.append(bundle_graph.size())
+        if debug:
+            initial_error = bundle_graph.error(initial_estimates)
+            optimized_error = bundle_graph.error(optimized_estimates)
+            print(f"----------------Solved bundle # {i} from frame {bundle_window[0]} to frame {bundle_window[1]}------------------")
+            print(f"number of factors in graph is {num_factor_in_bundles[-1]}")
+            print(f"initial graph error was {initial_error}, and after optimization the error is {optimized_error}")
+    if debug:
+        print(f"FINISHED SOLVING BUNDLES!")
+        print(f"Mean number of factors per graph is: {np.mean(num_factor_in_bundles)})")
+        print(f"Min number of factors over graphs: {np.min(num_factor_in_bundles)})")
+        print(f"Max number of factors over graphs: {np.max(num_factor_in_bundles)})")
+
+    # Step 3: Extracting Relative Poses Between Consecutive KeyFrames, and Also their Global Pose (relative to frame 0)
+    optimized_relative_keyframes_poses = []
+    optimized_global_keyframes_poses = []
+    _, bundle_window, _, _, _, optimized_estimates, marginals = bundle_results[0]
+    estimated_camera_position = optimized_estimates.atPose3(gtsam.symbol(CAMERA, bundle_window[0]))
+    optimized_global_keyframes_poses.append(estimated_camera_position)
+    #optimized_global_keyframes_poses.append(gtsam.Pose3())  # Initialize with first camera pose
+    global_3d_points = []
+    for bundle_res in bundle_results:
+        i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates, marginals = bundle_res
+        estimated_camera_position = optimized_estimates.atPose3(gtsam.symbol(CAMERA, bundle_window[1]))  # transforms from end of bundle to its beginning
+        optimized_relative_keyframes_poses.append(estimated_camera_position)
+        previous_global_pose = optimized_global_keyframes_poses[-1]  # transforms from beginning of bundle to global world
+        current_global_pose = previous_global_pose * estimated_camera_position # transforms from end of bundle to global world
+        bundle_3d_points = gtsam.utilities.extractPoint3(optimized_estimates)
+        for point in bundle_3d_points:
+            global_point = previous_global_pose.transformFrom(gtsam.Point3(point))
+            global_3d_points.append(global_point)
+        optimized_global_keyframes_poses.append(current_global_pose)
+
+    if plot_results:
+        # Compare Our Results With The Ground Truth Trajectory
+        global_3d_points_numpy = np.array(global_3d_points)
+        global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_global_keyframes_poses])
+        gt_camera_positions = get_gt_trajectory()[np.array(key_frames)]
+        plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
+                          points_3d=global_3d_points_numpy, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+
+    if path_to_serialize:
+        import pickle
+        bundle_adjustment_results_dict = {"bundle_results": bundle_results,
+                                          "optimized_relative_keyframes_poses": optimized_relative_keyframes_poses,
+                                          "optimized_global_keyframes_poses": optimized_global_keyframes_poses,
+                                          "bundle_windows": bundle_windows}
+        with open(path_to_serialize, 'wb') as f:
+            pickle.dump(bundle_adjustment_results_dict, f)
+    return bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows
+
 
 if __name__ == "__main__":
     import exercise_4

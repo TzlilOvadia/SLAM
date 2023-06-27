@@ -52,11 +52,17 @@ def plot_trajectory_and_points(camera_positions, points_locations):
     plt.legend()
     plt.savefig("q2_camera_and_points")
 
-def plot_trajectories(camera_positions, gt_camera_positions, path=""):
+
+
+
+
+def plot_trajectories(camera_positions, gt_camera_positions, points_3d=None, path=""):
     plt.figure()
     plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
     #plt.scatter(x=camera_positions[:10, 0], y=camera_positions[:10, 2], color='blue', s=20)
     plt.scatter(x=gt_camera_positions[:, 0], y=gt_camera_positions[:, 2], color='orange', label='ground truth trajectory', s=0.75)
+    if points_3d is not None:
+        plt.scatter(x=points_3d[:, 0], y=points_3d[:, 2], color='gray', label='landmarks', s=0.2)
     #plt.scatter(x=gt_camera_positions[:10, 0], y=gt_camera_positions[:10, 2], color='orange', s=10)
     plt.xlabel("X")
     plt.ylabel("Z")
