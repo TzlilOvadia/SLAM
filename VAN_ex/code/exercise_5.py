@@ -73,26 +73,10 @@ def choose_key_frames_by_elapsed_time(frameIds):
     return key_frames
 
 
-def choose_key_frames_by_tracks_count_median(frameIds, percentage=.82):
-    """
-    choosing proper keyframes using a median criterion
-    """
-    # Sort frames based on track length (ascending order)
-    frameIds = list(frameIds.keys())[:500]
-    sorted_frames = sorted(frameIds, key=lambda frameId: len(track_db.get_track_ids_for_frame(frameId)))
-    for fid in sorted_frames:
-        l = len(track_db.get_track_ids_for_frame(fid))
-        #print(f"frame id {fid} has {l} tracks")
-    # Calculate the index of the median frame
-    median_index = int(len(sorted_frames) * percentage)
-
-    # Select the keyframes from the median frame to the last frame
-    key_frames = sorted(sorted_frames[median_index:])
-    # return [frameId for frameId in range(1, len(frameIds),5)]
-    return key_frames
 
 def get_bundle_windows(key_frames):
     return [(key_frames[i - 1], key_frames[i]) for i in range(1, len(key_frames))]
+
 
 from scipy.spatial.transform import Rotation
 def _compute_distance(pose_i, pose_j):
@@ -153,9 +137,8 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
     for track_data, trackId in relevant_tracks:
         # Check whether the track is too short
         track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
-
         track_starts_in_frame_id = track_data[0][FRAME_ID]
-        if track_ends_in_frame_id < bundle_ends_in_frame_id:
+        if track_ends_in_frame_id < bundle_ends_in_frame_id or bundle_starts_in_frame_id < track_starts_in_frame_id:
             continue
 
         # TODO original code uses a 2d point coordinates from last frame of track, but uses the cam_pose of the last frame in the bundle... wrong
@@ -219,35 +202,35 @@ def init_factor_graph_variables(track_db, bundle_ends_in_frame_id, bundle_starts
             factor_graph.add(gtsam.PriorFactorPose3(cam_pose_sym, cam_pose, prior_noise))
     return frameId_to_cam_pose, factor_graph, initial_estimates
 
+
 def criteria(frames, percentage, track_db):
     """
     Choose keyframes by the median track len's from the last frame
     """
     key_frames = [0]
     n = len(frames)
-    while key_frames[-1] < len(frames)-1:
+    while key_frames[-1] < len(frames) - 1:
         last_key_frame = key_frames[-1]
         frame = frames[last_key_frame]
         tracks = track_db.get_track_ids_for_frame(frame)
 
-        
         tracks_by_lengths = sorted([track_db.get_track_data(trackId)[-1][FRAME_ID] for trackId in tracks])
         new_key_frame = tracks_by_lengths[int(len(tracks_by_lengths) * percentage)]
-        distance, rotation = 0,0
+        distance, rotation = 0, 0
         for fid in range(frame, new_key_frame):
             cur_pose = track_db.get_extrinsic_matrix_by_frameId(frame)
             prev_pose = track_db.get_extrinsic_matrix_by_frameId(frame - 1)
             cur_step, angle = _compute_distance(prev_pose, cur_pose)
             distance += cur_step
             rotation += angle
-            if (abs(rotation) > 0.3 or abs(distance) > 80) and (fid - frame) > 4:
+            if (abs(rotation) > 0.5 or abs(distance) > 100) and 4 < (fid - frame) < 20:
                 new_key_frame = fid
                 break
 
         key_frames.append(min(new_key_frame, n - 1))
 
-
     return key_frames
+
 
 def get_only_relevant_tracks(track_db, frame_id):
     tracksIds = set()
@@ -646,12 +629,15 @@ def q3():
     global_3d_points_numpy = np.array(global_3d_points)
     global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_global_keyframes_poses])
     gt_camera_positions = get_gt_trajectory()[np.array(key_frames)]
-    plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, points_3d=global_3d_points_numpy, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+    plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+    plt.savefig(PATH_TO_SAVE_2D_TRAJECTORY)
 
     # Step 6: Presenting KeyFrame Localization Over Time
     plot_localization_error_over_time(key_frames, camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, path=PATH_TO_SAVE_LOCALIZATION_ERROR)
-    plt.savefig(PATH_TO_SAVE_2D_TRAJECTORY)
+    plt.savefig(PATH_TO_SAVE_LOCALIZATION_ERROR)
     # Step 7: Presenting a View From Above (in 2d) of the Scene, With Keyframes and 3d Points
+    plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, points_3d=global_3d_points_numpy, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+
     #TODO I DIDN'T PRESENT YET A VIEW FROM OF THE SCENE WITH THE 3d POINTS (I ONLY ADDED THE CAMERA LOCATIONS). I'm not sure exactly what is required
     a = 5  # for you
 
@@ -660,11 +646,11 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None):
     PATH_TO_SAVE_COMPARISON_TO_GT = "q3_compare_to_ground_truth"
     PATH_TO_SAVE_LOCALIZATION_ERROR = "q3_localization_error"
     PATH_TO_SAVE_2D_TRAJECTORY = "q3_2d_view_of_the_entire_scene"
-
+    print("\n\n\n\n\n")
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .85, track_db)
+    key_frames = criteria(list(frameIds.keys()), .87, track_db)
 
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window
@@ -731,10 +717,10 @@ if __name__ == "__main__":
     random.seed(6)
     s = gtsam.StereoCamera()
     track_db = TrackDatabase()
-    deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
-    if deserialization_result == FAILURE:
-        _, track_db = exercise_4.track_camera_for_many_images()
-        track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+    # deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
+    # if deserialization_result == FAILURE:
+    _, track_db = exercise_4.track_camera_for_many_images()
+    track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
     q3()
     #q1()

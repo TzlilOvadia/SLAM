@@ -172,7 +172,7 @@ def find_supporters(Rt, m2, consensus_matches, k, kp_left, kp_right, thresh=2, d
         right_1_2d_location_real = np.array(kp_right[cur_right_ind].pt)
         left_dist = np.linalg.norm(left_1_2d_location_real - left_1_2d_location_projected)
         right_dist = np.linalg.norm(right_1_2d_location_real - right_1_2d_location_projected)
-        is_supporter = (left_dist < thresh) and (right_dist < thresh)
+        is_supporter = (left_dist < thresh**2) and (right_dist < thresh**2)
         are_good_matches[i] = is_supporter
         num_good_matches += is_supporter
     if debug:
@@ -211,6 +211,7 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
     refined_Rt = solvePnP(kp_left, supporters, intrinsic_matrix, flags=0)
     if refined_Rt is None:
         refined_Rt = best_Rt_candidate
+
     _, num_good_matches = find_supporters(refined_Rt, right_camera_matrix, points_to_choose_from, intrinsic_matrix,
                                                                      kp_left=kp_left, kp_right=kp_right, thresh=thresh,
                                                                      debug=debug)

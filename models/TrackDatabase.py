@@ -3,6 +3,8 @@ from utils.utils import read_images
 import pickle
 import random
 import models.Constants as Constants
+import cv2
+from models import Matcher
 # noinspection PyCompatibility
 FEATURES = 1
 EVEN = 0
@@ -29,6 +31,7 @@ class TrackDatabase:
         # I added these following attributes to be used in exercise 5:
         self.camera_positions = None
         self.ex_matrices = None
+        self.matcher_cache = dict()
 
     def add_track(self, trackId, frameId, feature_location_prev, feature_location_cur, kp_prev, kp_cur):
         prev_feature = (kp_prev, feature_location_prev, frameId)
@@ -87,7 +90,6 @@ class TrackDatabase:
         else:
             return None
 
-
     def serialize(self, file_path):
         data = {
             'tracks': self._tracks,
@@ -102,7 +104,8 @@ class TrackDatabase:
             'mean_frame_links': self._mean_frame_links,
             'frame_id_to_inliers_ratio': self._frame_id_to_inliers_ratio,
             'ex_camera_positions': self.camera_positions,
-            'ex_matrices': self.ex_matrices
+            'ex_matrices': self.ex_matrices,
+            'matcher_cache': self.matcher_cache
         }
         with open(file_path, 'wb') as f:
             pickle.dump(data, f)
@@ -124,8 +127,13 @@ class TrackDatabase:
                 self._frame_id_to_inliers_ratio = data['frame_id_to_inliers_ratio']
                 self.camera_positions = data['ex_camera_positions']
                 self.ex_matrices = data['ex_matrices']
+                try:
+                    self.matcher_cache = data['matcher_cache']
+                except KeyError:
+                    self.matcher_cache = None
             return Constants.SUCCESS
-        except Exception:
+
+        except FileNotFoundError or PermissionError:
             return Constants.FAILURE
 
     def generate_new_track_id(self):
@@ -250,3 +258,9 @@ class TrackDatabase:
 
     def get_track_data(self, track_id):
         return self._tracks[track_id]
+
+    def set_matcher(self, matcher_cache):
+        self.matcher_cache = matcher_cache
+
+    def get_matcher_cache(self):
+        return self.matcher_cache
