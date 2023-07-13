@@ -42,6 +42,7 @@ def track_camera_for_many_images(thresh=0.6):
         cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k,
                                                                          left_camera_extrinsic_mat, m2, matcher,
                                                                          file_index=frameId + 1, debug=False)
+
         consecutive_matches = matcher.match_between_consecutive_frames(frameId, frameId + 1, thresh=thresh)
 
         # UPDATED: Note that the consensus_matche function is modified to work with the tracking DB mechanism (!)
@@ -65,6 +66,7 @@ def track_camera_for_many_images(thresh=0.6):
         track_db.set_ex_camera_positions(camera_positions)
         track_db.set_ex_matrices(extrinsic_matrices)
 
+    track_db.set_matcher(matcher_cache=matcher.get_matcher_cache())
     return camera_positions, track_db
 
 
@@ -142,7 +144,6 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
     :return:
     """
 
-
     concensus_matces = []
     filtered_matches = []
     track_db.prepare_to_next_pair(frameId)
@@ -154,8 +155,6 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
         cur_left_kp = m.trainIdx
 
         if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping:
-
-
             xl, yl = matcher.get_feature_location_frame(frameId, kp=prev_left_kp, loc=LEFT)
             xr, yr = matcher.get_feature_location_frame(frameId, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
 
@@ -421,20 +420,20 @@ def q7(path, length=10):
 
         print(f"Plotting the ReProjection Errors...")
         plot_reprojection_errors(frame_ids, left_errors, right_errors, frame)
-    a=5
 
 
 if __name__ == "__main__":
-    PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
-    # track_db = TrackDatabase()
-    # deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
-    # if deserialization_result == FAILURE:
-    _, track_db = track_camera_for_many_images()
-    track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
-    # q1(PATH_TO_SAVE_TRACKER_FILE)
-    # q2(PATH_TO_SAVE_TRACKER_FILE)
-    # q3(PATH_TO_SAVE_TRACKER_FILE, num_to_show=10)
-    # q4(PATH_TO_SAVE_TRACKER_FILE)
-    # q5(PATH_TO_SAVE_TRACKER_FILE)
-    # q6(PATH_TO_SAVE_TRACKER_FILE)
-    # q7(PATH_TO_SAVE_TRACKER_FILE, length=10)
+    PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker_1"
+    track_db = TrackDatabase()
+    deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
+    if deserialization_result == FAILURE:
+        _, track_db = track_camera_for_many_images()
+        track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+
+    q1(PATH_TO_SAVE_TRACKER_FILE)
+    q2(PATH_TO_SAVE_TRACKER_FILE)
+    q3(PATH_TO_SAVE_TRACKER_FILE, num_to_show=10)
+    q4(PATH_TO_SAVE_TRACKER_FILE)
+    q5(PATH_TO_SAVE_TRACKER_FILE)
+    q6(PATH_TO_SAVE_TRACKER_FILE)
+    q7(PATH_TO_SAVE_TRACKER_FILE, length=10)

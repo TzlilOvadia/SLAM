@@ -106,7 +106,7 @@ def get_relative_pose_between_frames(frame_a, frame_b, estimates):
     return relative_pose
 
 
-def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_poses, bundle_windows, rel_cov_mat_lst):
+def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_poses, rel_cov_mat_lst):
     pose_graph = gtsam.NonlinearFactorGraph()
     initial_estimates = gtsam.Values()
     landmarks = set()
@@ -135,7 +135,6 @@ def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_
         noise_cov = gtsam.noiseModel.Gaussian.Covariance(rel_cov_mat_lst[i] *.1)
         pose_factor = gtsam.BetweenFactorPose3(c0, c1, relative_pose, noise_cov)
         pose_graph.add(pose_factor)
-
     return pose_graph, initial_estimates, landmarks
 
 
@@ -145,7 +144,7 @@ def q2(force_recompute=False, debug=True):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, cond_matrices = load_bundle_results(path=PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS, force_recompute=force_recompute, debug=debug)
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     print("Creating Pose Graph...")
-    pose_graph, initial_estimates, landmarks = create_pose_graph(bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, cond_matrices)
+    pose_graph, initial_estimates, landmarks = create_pose_graph(bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, cond_matrices)
     print("Optimizing graph...")
     optimizer = gtsam.LevenbergMarquardtOptimizer(pose_graph, initial_estimates)
     optimized_estimates = optimizer.optimize()
