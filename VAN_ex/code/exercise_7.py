@@ -37,166 +37,6 @@ from heapq import heappop, heappush
 import dijkstar
 
 
-class GraphNode:
-    def __init__(self, index, weight=None):
-        self.index = index
-        self.weight = weight
-
-class GraphEdge:
-    def __init__(self, source, target, covariance=None):
-        self.source = source
-        self.target = target
-        self.covariance = covariance
-        self.weight = self.calculate_weight(covariance)
-
-    def calculate_weight(self, covariance):
-        if covariance is None:
-            return 0
-        return np.sqrt(np.linalg.det(covariance))
-
-class Graph:
-    def __init__(self, bundle_results, covariance_list):
-
-        self.num_vertices = len(bundle_results[BUNDLE_WINDOW_INDEX])
-        self.edges = defaultdict(list)
-        # if covariance_list is not None:
-        self.construct_graph(covariance_list)
-
-    def construct_graph(self, covariance_list):
-        for i in range(len(covariance_list)):
-            self.add_edge(i, i + 1, covariance_list[i])
-
-    def add_edge(self, source, target, covariance):
-        edge = GraphEdge(source, target, covariance)
-        self.edges[source].append(edge)
-
-    def get_shortest_path(self, source, target):
-        distances = [np.inf] * self.num_vertices
-        distances[source] = 0
-        parents = [-1] * self.num_vertices
-        queue = [(0, source)]
-
-        while queue:
-            _, current_node = heappop(queue)
-            if current_node == target:
-                break
-            for edge in self.edges[current_node]:
-                if distances[edge.target] > distances[current_node] + edge.weight:
-                    distances[edge.target] = distances[current_node] + edge.weight
-                    parents[edge.target] = current_node
-                    heappush(queue, (distances[edge.target], edge.target))
-
-        path = []
-        current_node = target
-        while current_node != -1:
-            path.append(current_node)
-            current_node = parents[current_node]
-        return path[::-1]  # Return path from source to target
-
-    def get_shortest_path2(self, source, target):
-        dist = [np.zeros((6, 6))] * self.num_vertices
-        dist[source] = np.zeros((6, 6))
-        parents = [-1] * self.num_vertices
-        queue = [(np.zeros((6, 6)), source)]
-
-        while queue:
-            _, current_node = heappop(queue)
-            if current_node == target:
-                break
-            for edge in self.edges[current_node]:
-                new_dist = dist[current_node] + edge.covariance
-                if np.linalg.norm(new_dist) < np.linalg.norm(dist[edge.target]):
-                    dist[edge.target] = new_dist
-                    parents[edge.target] = current_node
-                    heappush(queue, (dist[edge.target], edge.target))
-
-        path = []
-        current_node = target
-        while current_node != -1:
-            path.append(current_node)
-            current_node = parents[current_node]
-        return path[::-1]  # Return path from source to target
-
-    def estimate_covariance(self, path):
-        estimated_cov = np.zeros((6, 6))
-        for i in range(len(path) - 1):
-            source = path[i]
-            target = path[i + 1]
-            for edge in self.edges[source]:
-                if edge.target == target:
-                    estimated_cov += edge.covariance
-                    break
-        return estimated_cov
-
-    def sum_cov_along_path(self, path):
-        total_cov = np.zeros((6, 6))
-        for i in range(len(path) - 1):
-            source = path[i]
-            target = path[i + 1]
-            for edge in self.edges[source]:
-                if edge.target == target:
-                    total_cov += edge.covariance
-                    break
-        return total_cov
-
-
-
-def generalized_consensus_matcher(frame_loop_candidate, track_db, threshold=.1, matching_threshold=1):
-    matcher = Matcher()
-    matcher_cache = track_db.get_matcher_cache()
-    matcher.set_cache(matcher_cache)
-    closure_detection_candidates = []
-    for some_prev_frame in range(frame_loop_candidate-1):
-        matching, ratio = matcher.match_between_any_frames(reference_frame=frame_loop_candidate, other_frame=some_prev_frame,
-                                         thresh=matching_threshold)
-
-    # If inliers to total matches' ratio is significantly high
-        if ratio > threshold:
-            closure_detection_candidates.append(some_prev_frame)
-
-    return closure_detection_candidates
-
-
-def find_all_closures_candidates(key_frames):
-    candidates = {}
-    for frame_id in key_frames:
-        candidates_i = generalized_consensus_matcher(frame_id, track_db)
-        candidates[frame_id] = candidates_i
-
-    return candidates
-
-
-def check_for_closure(key_frame, closure_candidates, mahalanobis_thresh):
-    initial_estimates = bundle_results[INITIAL_ESTIMATES_INDEX]
-    cam_matrix = gtsam.Pose3(initial_estimates.atPose3(gtsam.symbol(CAMERA, key_frame)))
-    top_candidates = []
-    for candidate_frame_id in closure_candidates:
-        min_cov_path = 1#graph.sum_cov_along_path()
-        candidate_cam_matrix = gtsam.Pose3(initial_estimates.atPose3(gtsam.symbol(CAMERA, candidate_frame_id)))
-        diff_between_cams = candidate_cam_matrix.between(cam_matrix)
-
-
-        # Perform Mahalanobis distance thresholding
-        # TODO: Retrieve the covariance
-        if get_mahalanobis_distance(diff_between_cams, covariance=None) < mahalanobis_thresh:
-            top_candidates.append(candidate_frame_id)
-
-    return top_candidates
-
-
-def loop_closure1(key_frames, mahalanobis_thresh=MAHALANOBIS_THRESH):
-    graph = Graph(bundle_results, cond_matrices)
-    candidates = find_all_closures_candidates(key_frames) # key frame, closure_candidates = candidates[i]
-    for key_frame, closure_candidates in candidates:
-        check_for_closure(key_frame, closure_candidates,mahalanobis_thresh)
-
-
-def get_mahalanobis_distance(diff_between_cams, covariance):
-    # Convert diff_between_cams pose to a 6-dimensional vector
-    diff_vector = gtsam.Pose3.Log(diff_between_cams).vector()
-    return np.sqrt(diff_vector.T @ inv(covariance) @ diff_vector)
-
-
 ##################################################################################
 
 
@@ -326,14 +166,15 @@ def create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks)
     initial_estimates = gtsam.Values()
     # prior factor + first camera location
     c0 = gtsam.symbol(CAMERA, reference_kf)
-    initial_estimates.insert(c0, gtsam.Pose3())
+    c0_cam_pose = gtsam.Pose3()
+    initial_estimates.insert(c0, c0_cam_pose)
     s = 0.1 * np.array([(3 * np.pi / 180), (3 * np.pi / 180), (3 * np.pi / 180)] + [.1, 0.01, 1.0])
     prior_noise = gtsam.noiseModel.Diagonal.Sigmas(s)
-    factor_graph.add(gtsam.PriorFactorPose3(c0, gtsam.Pose3(), prior_noise))
+    factor_graph.add(gtsam.PriorFactorPose3(c0, c0_cam_pose, prior_noise))
 
     # second camera initial location
     c1 = gtsam.symbol(CAMERA, candidate_kf)
-    c1_cam_pose = gtsam.Pose3(exercise_5.invert_Rt_transformation(Rt)) # now pose should be from candidate to reference
+    c1_cam_pose = gtsam.Pose3(exercise_5.invert_Rt_transformation(Rt))  # now pose should be from candidate to reference
     initial_estimates.insert(c1, c1_cam_pose)
 
     # 3d points locations + projection factors
