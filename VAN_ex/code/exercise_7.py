@@ -13,7 +13,7 @@ from models.TrackDatabase import TrackDatabase
 from utils import utils
 from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches, draw_matches, plot_four_cameras, \
     draw_supporting_matches, plot_trajectories, plot_regions_around_matching_pixels, plot_dict, plot_connectivity_graph, \
-    gen_hist, plot_reprojection_errors, plot_localization_error_over_time, plot_projections_on_images, plot_trajectory_and_points, plot_2d_cameras_and_points, draw_supporting_matches_general
+    gen_hist, plot_reprojection_errors, plot_localization_error_over_time, plot_projections_on_images, plot_trajectory_and_points, plot_2d_cameras_and_points, draw_supporting_matches_general, plot_uncertainty_over_time
 from utils.utils import *
 from matplotlib import pyplot as plt
 from models.Constants import *
@@ -358,9 +358,20 @@ def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after, key_
 
     pose_graph_after_covariance = gtsam.Marginals(pose_graph_after, values_after)
     pose_graph_before_covariance = gtsam.Marginals(pose_graph, initial_estimates)
+    after = []
+    before = []
+    for kf in key_frames:
+        key_vectors = gtsam.KeyVector()
+        key_vectors.append(gtsam.symbol(CAMERA, kf))
+        kf_cov_after = pose_graph_after_covariance.jointMarginalCovariance(key_vectors).fullMatrix()
+        kf_cov_before = pose_graph_before_covariance.jointMarginalCovariance(key_vectors).fullMatrix()
+        after.append(kf_cov_after)
+        before.append(kf_cov_before)
+    after_score = [np.abs(np.linalg.det(cov)) for cov in after]
+    before_score = [np.abs(np.linalg.det(cov)) for cov in before]
 
-    plot_localization_error_over_time(key_frames, trajectory_after, gt_trajectory, path="lc_localization_error_graph_after")
-    plot_localization_error_over_time(key_frames, trajectory_before, gt_trajectory, path="lc_localization_error_graph_before")
+    plot_uncertainty_over_time(key_frames, after_score, "lc_uncertainty_after", "(after)")
+    plot_uncertainty_over_time(key_frames, before_score, "lc_uncertainty_before", "(before)")
 
 
 def plot_pg_locations_before_and_after_lc(pose_graph_after, values_after, key_frames):
@@ -447,7 +458,9 @@ if __name__ == "__main__":
                                                                        pose_graph_initial_estimates=initial_estimates,
                                                                        draw_supporting_matches_flag=True,
                                                                        points_to_stop_by=True,
-                                                                       compare_to_gt=True)
+                                                                       compare_to_gt=True,
+                                                                       show_localization_error=True,
+                                                                       show_uncertainty=True)
 
     # Printing the number of successful loop closures
     print(f"Overall, {len(successful_lc)} loop closures were detected.")

@@ -33,6 +33,18 @@ def gen_hist(data, bins, title="", x="X", y="Y"):
     plt.show()
 
 
+def plot_uncertainty_over_time(keyframes, uncertainty_score, path="", suffix=""):
+    plt.figure()
+    plt.plot(keyframes, uncertainty_score)
+    plt.xlabel("KeyFrame Index")
+    plt.ylabel("uncertainty score per frame")
+    plt.title("uncertainty score per frame " + suffix)
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
+
+
 def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_positions, path=""):
     plt.figure()
     localization_error = np.linalg.norm(np.abs(camera_positions - gt_camera_positions), axis=1)
