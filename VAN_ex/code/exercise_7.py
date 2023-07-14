@@ -196,6 +196,12 @@ def create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks)
         factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, c0, point_symbol, GTSAM_K)
         factor_graph.add(factor)
 
+        # creating projection factor on c0
+        measured_point2 = gtsam.StereoPoint2(last_loc[0], last_loc[1], last_loc[2])
+        stereomodel_noise = gtsam.noiseModel.Isotropic.Sigma(3, 0.1)
+        factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, c1, point_symbol, GTSAM_K)
+        factor_graph.add(factor)
+
     return factor_graph, initial_estimates, landmarks
 
 
