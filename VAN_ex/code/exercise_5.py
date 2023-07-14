@@ -155,7 +155,7 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
 
         last_point3 = last_frame_pose.backproject(last_point2)
 
-        if last_point3[2] <= 0 or last_point3[2] >= 150:
+        if last_point3[2] <= 0 or last_point3[2] >= 200:
             continue
 
         point_symbol = gtsam.symbol(POINT, trackId)
@@ -214,7 +214,7 @@ def criteria(frames, percentage, track_db):
         frame = frames[last_key_frame]
         tracks = track_db.get_track_ids_for_frame(frame)
 
-        tracks_by_lengths = sorted([track_db.get_track_data(trackId)[-1][FRAME_ID] for trackId in tracks])
+        tracks_by_lengths = sorted([track_db.get_track_data(trackId)[-1][FRAME_ID] for trackId in tracks if len(track_db.get_track_data(trackId))>2])
         new_key_frame = tracks_by_lengths[int(len(tracks_by_lengths) * percentage)]
         distance, rotation = 0, 0
         for fid in range(frame, new_key_frame):
@@ -571,7 +571,7 @@ def q3():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .85, track_db)
+    key_frames = criteria(list(frameIds.keys()), .8, track_db)
 
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window
@@ -717,12 +717,12 @@ if __name__ == "__main__":
     random.seed(6)
     s = gtsam.StereoCamera()
     track_db = TrackDatabase()
-    # deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
-    # if deserialization_result == FAILURE:
-    _, track_db = exercise_4.track_camera_for_many_images()
-    track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+    deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
+    if deserialization_result == FAILURE:
+        _, track_db = exercise_4.track_camera_for_many_images()
+        track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
-    #q3()
+    q3()
     #q1()
     #q2()
     # q2()

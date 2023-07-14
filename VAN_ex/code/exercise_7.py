@@ -226,7 +226,7 @@ def solve_trivial_bundle(reference_kf, candidate_kf, matching_data):
 
 def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estimates, matcher,
                  mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=5,
-                 req_inliers_ratio = 0.9, draw_supporting_matches_flag=False, points_to_stop_by=False,
+                 req_inliers_ratio = 0.92, draw_supporting_matches_flag=False, points_to_stop_by=False,
                  compare_to_gt=False, show_localization_error=False, show_uncertainty=False):
     graph_for_shortest_path, edge_to_covariance = \
         init_graph_for_shortest_path(pose_graph=pose_graph, key_frames=key_frames, cond_matrices=cond_matrices)
@@ -273,10 +273,9 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
                 print(f"didn't find good transformation between {i}th kf and {candidate}th kf")
                 continue
             print(f"number of tracks between {i}th kf and {candidate}th kf after consensus matching is {len(filtered_tracks)}, with inliers ratio of {inliers_ratio}")
-            a = 5
             if inliers_ratio > req_inliers_ratio:
                 if draw_supporting_matches_flag:
-                    draw_supporting_matches_general(candidate_kf, reference_kf, matcher, matches, supporting_indices)
+                    # draw_supporting_matches_general(candidate_kf, reference_kf, matcher, matches, supporting_indices)
                     draw_supporting_matches_flag = False
                 # Step 3: We now optimize this guess by applying a small bundle on it
                 print(f"Solving small bundle for {i}-{candidate} with inliers ratio {inliers_ratio}")
@@ -293,7 +292,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
                 # Step 4: we update the pose graph accordingly
                 c0 = gtsam.symbol(CAMERA, candidate_kf)
                 c1 = gtsam.symbol(CAMERA, reference_kf)
-                noise_cov = gtsam.noiseModel.Gaussian.Covariance(conditional_covariance)
+                noise_cov = gtsam.noiseModel.Gaussian.Covariance(conditional_covariance * 0.01)
                 pose_factor = gtsam.BetweenFactorPose3(c0, c1, relative_pose, noise_cov)
                 pose_graph.add(pose_factor)
                 edge_cost = edge_cost_func(conditional_covariance)
@@ -308,12 +307,16 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
             cur_pose_graph_estimates = optimizer.optimize()
             should_optimize = False
             if points_to_stop_by and (len(successful_lc) - prev_num_of_successful_lc) > 15:
-                plt.figure()
+                # plt.figure(num=1)
                 marginals = gtsam.Marginals(pose_graph, cur_pose_graph_estimates)
+
+
                 plot_helper.plot_trajectory(1, cur_pose_graph_estimates, marginals=marginals,
-                                            title=f"ex7_optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}", scale=1,
+                                            title=f"optimized estimates trajectory with cov after: {len(successful_lc)} updates", scale=1,
                                             save_file=f"ex7_optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}")
                 prev_num_of_successful_lc = len(successful_lc)
+
+
     if compare_to_gt:
         plot_pg_locations_before_and_after_lc(pose_graph, cur_pose_graph_estimates, key_frames)
     if show_localization_error:

@@ -129,9 +129,13 @@ def draw_supporting_matches_general(file_index1, file_index2, matcher, matches, 
     colors = [(255,0,0), (0,255,0)]
     img3 = cv2.vconcat([cv2.cvtColor(im1_left, cv2.COLOR_GRAY2BGR), cv2.cvtColor(im2_left, cv2.COLOR_GRAY2BGR)])
     # sort_matches = sorted(matches, key=lambda x: x[0].distance)[:min(len(matches), 150)]
+    print(len(kp1_left))
+    print(len(kp2_left))
     for i, match in enumerate(matches):
         img1_idx = match[0].queryIdx
         img2_idx = match[0].trainIdx
+        if img2_idx >= len(kp2_left) or img2_idx>= len(kp1_left):
+            continue
         (x1, y1) = kp1_left[img1_idx].pt
         (x2, y2) = kp2_left[img2_idx].pt
         y2 += im1_left.shape[0]  # Shift the second image points down by the height of the first image

@@ -55,7 +55,7 @@ def q1():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .85, track_db)
+    key_frames = criteria(list(frameIds.keys()), .8, track_db)
     bundle_windows = get_bundle_windows(key_frames)
 
     # Step 2: Define Bundle Optimization
