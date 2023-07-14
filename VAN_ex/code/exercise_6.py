@@ -27,6 +27,7 @@ GTSAM_K = utils.get_gtsam_calib_mat(K, M2)
 
 
 def load_bundle_results(path=None, force_recompute=False, debug=True):
+    import pickle
     if path is None:
         path = PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS
     if force_recompute:
@@ -54,7 +55,7 @@ def q1():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .85, track_db)
+    key_frames = criteria(list(frameIds.keys()), .8, track_db)
     bundle_windows = get_bundle_windows(key_frames)
 
     # Step 2: Define Bundle Optimization
@@ -97,6 +98,7 @@ def get_conditional_covariance_matrix_between_keyframes(window, marginals):
 
 
 def get_relative_pose_between_frames(frame_a, frame_b, estimates):
+    # returns the transformation from frame_b world into frame_a world
     # Retrieve optimized poses for cameras ci and ck.
     camera_a = estimates.atPose3(gtsam.symbol(CAMERA, frame_a))
     camera_b = estimates.atPose3(gtsam.symbol(CAMERA, frame_b))
@@ -106,7 +108,7 @@ def get_relative_pose_between_frames(frame_a, frame_b, estimates):
     return relative_pose
 
 
-def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_poses, bundle_windows, rel_cov_mat_lst):
+def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_poses, rel_cov_mat_lst):
     pose_graph = gtsam.NonlinearFactorGraph()
     initial_estimates = gtsam.Values()
     landmarks = set()
@@ -135,7 +137,6 @@ def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_
         noise_cov = gtsam.noiseModel.Gaussian.Covariance(rel_cov_mat_lst[i] *.1)
         pose_factor = gtsam.BetweenFactorPose3(c0, c1, relative_pose, noise_cov)
         pose_graph.add(pose_factor)
-
     return pose_graph, initial_estimates, landmarks
 
 
@@ -145,7 +146,7 @@ def q2(force_recompute=False, debug=True):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, cond_matrices = load_bundle_results(path=PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS, force_recompute=force_recompute, debug=debug)
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     print("Creating Pose Graph...")
-    pose_graph, initial_estimates, landmarks = create_pose_graph(bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, cond_matrices)
+    pose_graph, initial_estimates, landmarks = create_pose_graph(bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, cond_matrices)
     print("Optimizing graph...")
     optimizer = gtsam.LevenbergMarquardtOptimizer(pose_graph, initial_estimates)
     optimized_estimates = optimizer.optimize()
@@ -186,7 +187,7 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
     if track_db is None:
         track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .85, track_db)
+    key_frames = criteria(list(frameIds.keys()), .8, track_db)
 
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window

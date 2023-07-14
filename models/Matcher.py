@@ -24,7 +24,6 @@ class Matcher:
         # Added a caching option which saves everything related to a particular file index (key)
 
         self.cache = {}
-
         self.display = display
         self._file_index = file_index
         self.algo = algo
@@ -63,7 +62,6 @@ class Matcher:
             return self._filtered_matches
         return self.cache[idx][FILTERED_MATCHES]
 
-
     def set_matches(self, matches, idx=None):
         self.cache[idx][MATCHES] = matches
 
@@ -76,7 +74,6 @@ class Matcher:
         kpi = self.get_kp(frameId)[loc]
         x, y = kpi[kp].pt
         return x, y
-
 
     def get_dsc(self):
         return self._img1_dsc, self._img2_dsc
@@ -120,8 +117,6 @@ class Matcher:
         self._img2_kp, self._img2_dsc = self.algo.detectAndCompute(self._img2, None)
         self.cache[self._file_index][LEFT] = (np.copy(self._img1_kp), np.copy(self._img1_dsc))
         self.cache[self._file_index][RIGHT] = (np.copy(self._img2_kp), np.copy(self._img2_dsc))
-
-
 
     def find_matching_features(self, with_significance_test=False, debug=False):
         """Find matching features between the img1 and img2 images using the matcher specified in the constructor.
@@ -175,6 +170,10 @@ class Matcher:
         self._matches = matches
         self.cache[file_index][MATCHES] = self._matches
 
+    def get_matcher_cache(self):
+        self._convert_cache_for_serialization()
+        return self.cache
+
     @staticmethod
     def apply_thresholds(matches, threshold):
         filtered = []
@@ -199,9 +198,77 @@ class Matcher:
         matches = self.matcher.knnMatch(prev_dsc, cur_dsc, k=2)
         filtered = Matcher.apply_thresholds(matches, thresh)
         self.cache[cur_frame_index][CONSECUTIVE] = filtered
-
-
         if debug:
             draw_matches(filtered, prev_im1, cur_im1, prev_kps, cur_kps, num_of_matches=5000, debug=debug, display=VERTICAL_REPRESENTATION)
         return filtered
 
+    def match_between_any_frames(self, reference_frame, other_frame, thresh=0.6, debug=False):
+        """
+        given to frames indices, this function will compute their matching points and cache it.
+        :param thresh: threshold to be applied between frames for KNN
+        :param reference_frame:
+        :param other_frame:
+        :return:
+        """
+
+        prev_kps, reference_dsc = self.cache[reference_frame][LEFT] # Returns kp, dsc of previous left image
+        cur_kps, other_dsc = self.cache[other_frame][LEFT] # Returns kp, dsc of current left image
+        reference_frame_img = self.cache[reference_frame][FRAMES][0]
+        other_frame_img = self.cache[other_frame][FRAMES][0]
+        matches = self.matcher.knnMatch(reference_dsc, other_dsc, k=2)
+        filtered = Matcher.apply_thresholds(matches, thresh)
+        ratio = len(matches) / len(filtered)
+        if debug:
+            draw_matches(filtered, reference_frame_img, other_frame_img, prev_kps, cur_kps, num_of_matches=5000,
+                         debug=debug, display=VERTICAL_REPRESENTATION)
+        return filtered
+
+    def set_cache(self, matcher_cache):
+        self.cache = matcher_cache
+
+    def _convert_cache_for_serialization(self):
+        for frame_id in range(2560):
+            cur_kps, cur_dsc = self.cache[frame_id][LEFT]
+            ser_kps=[]
+            for kp in cur_kps:
+                ser_kps.append(self.keypoint_to_dict(kp))
+            self.cache[frame_id][LEFT] = ser_kps, cur_dsc
+        for frame_id in range(2560):
+            cur_kps, cur_dsc = self.cache[frame_id][RIGHT]
+            ser_kps=[]
+            for kp in cur_kps:
+                ser_kps.append(self.keypoint_to_dict(kp))
+            self.cache[frame_id][RIGHT] = ser_kps, cur_dsc
+
+        for frame_id in range(2560):
+            matches = self.cache[frame_id][MATCHES]
+            filter_matches = self.cache[frame_id][FILTERED_MATCHES]
+            self.cache[frame_id][CONSECUTIVE] = None
+            ser_matches=[]
+            for match in matches:
+                ser_match = self.dmatch_to_dict(match)
+                ser_matches.append(ser_match)
+            self.cache[frame_id][MATCHES] = ser_matches
+            serialized_filter_matches=[]
+            for match in filter_matches:
+                ser_match = self.dmatch_to_dict(match)
+                serialized_filter_matches.append(ser_match)
+
+            self.cache[frame_id][FILTERED_MATCHES] = serialized_filter_matches
+
+
+
+
+    def keypoint_to_dict(self, keypoint):
+        return {
+            'pt': keypoint.pt,
+            'size': keypoint.size,
+            'angle': keypoint.angle,
+            'response': keypoint.response,
+            'octave': keypoint.octave,
+            'class_id': keypoint.class_id
+        }
+
+    # Convert cv2.DMatch objects to dictionaries
+    def dmatch_to_dict(self, dmatch):
+        return {'queryIdx': dmatch[0].queryIdx, 'trainIdx': dmatch[0].trainIdx, 'distance': dmatch[0].distance}

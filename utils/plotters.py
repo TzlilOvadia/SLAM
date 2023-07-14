@@ -16,6 +16,9 @@ DEFAULT_POV = 0
 TOP_POV = 80
 SIDE_POV = -120
 
+
+
+
 def gen_hist(data, bins, title="", x="X", y="Y"):
     """
     :param data:
@@ -28,6 +31,18 @@ def gen_hist(data, bins, title="", x="X", y="Y"):
     plt.ylabel(y)
     plt.xlabel(x)
     plt.show()
+
+
+def plot_uncertainty_over_time(keyframes, uncertainty_score, path="", suffix=""):
+    plt.figure()
+    plt.plot(keyframes, uncertainty_score)
+    plt.xlabel("KeyFrame Index")
+    plt.ylabel("uncertainty score per frame")
+    plt.title("uncertainty score per frame " + suffix)
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
 
 
 def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_positions, path=""):
@@ -56,7 +71,7 @@ def plot_trajectory_and_points(camera_positions, points_locations):
 
 
 
-def plot_trajectories(camera_positions, gt_camera_positions, points_3d=None, path=""):
+def plot_trajectories(camera_positions, gt_camera_positions, points_3d=None, path="", suffix=""):
     plt.figure()
     plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
     #plt.scatter(x=camera_positions[:10, 0], y=camera_positions[:10, 2], color='blue', s=20)
@@ -66,7 +81,7 @@ def plot_trajectories(camera_positions, gt_camera_positions, points_3d=None, pat
     #plt.scatter(x=gt_camera_positions[:10, 0], y=gt_camera_positions[:10, 2], color='orange', s=10)
     plt.xlabel("X")
     plt.ylabel("Z")
-    plt.title("Our Trajectory Vs Ground Truth Trajectory")
+    plt.title("Our Trajectory Vs Ground Truth Trajectory "+suffix)
     plt.legend()
     if path:
         plt.savefig(path)
@@ -84,6 +99,56 @@ def plot_2d_cameras_and_points(cameras_x, cameras_z, points_x, points_z, path=""
         plt.savefig(path)
     else:
         plt.show()
+
+
+def draw_supporting_matches_general(file_index1, file_index2, matcher, matches, supporting_indices):
+    """
+       Draws supporting matches between key-points in two general images.
+       This is done, for sake of consistency, on the left side camera images.
+
+       Parameters:
+       - file_index (int): The index of the file/image from KITTI dataset.
+       - matcher (object): An object of Matcher class.
+       - matches (list): List of matches between keypoints in two consecutive images.
+       - supporting_indices (list): List of supporting indices indicating the quality of the matches.
+
+       Returns: None
+
+       Functionality:
+       - This function takes the input parameters and performs the following tasks:
+           - Loads the left images and their key-points from the matcher object.
+           - Concatenates the left images horizontally.
+           - Sorts the matches based on their distance and selects the top 150 matches.
+           - Draws lines between key-points in the two consecutive images based on the supporting indices.
+           - Displays the image with drawn lines in a separate window.
+       """
+    im1_left = matcher.get_images(file_index1)[0]
+    im2_left = matcher.get_images(file_index2)[0]
+    kp1_left = matcher.get_kp(file_index1)[0]
+    kp2_left = matcher.get_kp(file_index2)[0]
+    colors = [(255,0,0), (0,255,0)]
+    img3 = cv2.vconcat([cv2.cvtColor(im1_left, cv2.COLOR_GRAY2BGR), cv2.cvtColor(im2_left, cv2.COLOR_GRAY2BGR)])
+    # sort_matches = sorted(matches, key=lambda x: x[0].distance)[:min(len(matches), 150)]
+    print(len(kp1_left))
+    print(len(kp2_left))
+    for i, match in enumerate(matches):
+        img1_idx = match[0].queryIdx
+        img2_idx = match[0].trainIdx
+        if img2_idx >= len(kp2_left) or img2_idx>= len(kp1_left):
+            continue
+        (x1, y1) = kp1_left[img1_idx].pt
+        (x2, y2) = kp2_left[img2_idx].pt
+        y2 += im1_left.shape[0]  # Shift the second image points down by the height of the first image
+        color = colors[int(supporting_indices[i])] if supporting_indices is not None else colors[1]
+        # Assign different thickness to the unsupported indices
+        thickness = 1 if supporting_indices is None or supporting_indices[i] else 4
+        cv2.line(img3, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=thickness)
+
+    plt.figure(figsize=(16, 9))
+    plt.imshow(img3)
+    plt.title("Supporting [Green], Unsupported [Red]" if supporting_indices is not None else "Matches between left_0 to left_1")
+    plt.savefig("lc_consensus_matches")
+
 
 
 def draw_supporting_matches(file_index, matcher, matches, supporting_indices):

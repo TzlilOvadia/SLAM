@@ -416,8 +416,9 @@ def plot_trajectory(
     fig.suptitle(title)
     # fig.canvas.set_window_title(title.lower())
     axes.view_init(vertical_axis='y')
+    gtsam.utils.plot.set_axes_equal(fignum=1)
     fig.savefig(save_file)
-
+    plt.close(fig)
     print(f"saved file: {save_file}")
 
 def plot_incremental_trajectory(fignum: int,
