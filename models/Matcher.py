@@ -221,7 +221,7 @@ class Matcher:
         if debug:
             draw_matches(filtered, reference_frame_img, other_frame_img, prev_kps, cur_kps, num_of_matches=5000,
                          debug=debug, display=VERTICAL_REPRESENTATION)
-        return filtered, ratio
+        return filtered
 
     def set_cache(self, matcher_cache):
         self.cache = matcher_cache

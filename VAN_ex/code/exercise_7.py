@@ -21,7 +21,7 @@ import gtsam
 from gtsam.utils import plot
 import utils.plot as plot_helper
 from models import Constants
-import exercise_4, exercise_6
+import exercise_4, exercise_6, exercise_3, exercise_5
 from exercise_4 import track_camera_for_many_images
 from exercise_6 import *
 PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
@@ -208,6 +208,13 @@ def update_pose_graph_with_factor(pose_graph, c0, c1, relative_pose, noise_cov):
     return pose_graph
 
 
+def edge_cost_func(cond_mat=None, equal=False):
+    if equal:
+        return 1
+    else:
+        return 0.000000001 * np.sqrt(1 / np.linalg.det(10 * cond_mat))
+
+
 def init_graph_for_shortest_path(pose_graph, key_frames, cond_matrices):
     graph_for_shortest_path = dijkstar.Graph()
     edge_to_covariance = {}
@@ -216,7 +223,7 @@ def init_graph_for_shortest_path(pose_graph, key_frames, cond_matrices):
         second = key_frames[i + 1]
         c0 = gtsam.symbol(Constants.CAMERA, first)
         c1 = gtsam.symbol(Constants.CAMERA, second)
-        edge_cost = 0.000000001 * np.sqrt(1 / np.linalg.det(10 * cond_matrices[i]))
+        edge_cost = edge_cost_func(cond_matrices[i])
         print(edge_cost)
         graph_for_shortest_path.add_edge(first, second, edge_cost)
         edge_to_covariance[(first, second)] = cond_matrices[i]
@@ -242,9 +249,49 @@ def compute_mahalanobis_distance_between_frames(relative_pose, relative_covarian
     return mahalanobis_distance
 
 
+def find_4_images_matches(consecutive_matches, prev_indices_mapping, cur_indices_mapping, ind_to_3d_point_prev, matcher, reference_kf, candidate_fk):
+    """
+
+    :param consecutive_matches:
+    :param prev_indices_mapping:
+    :param cur_indices_mapping:
+    :return:
+    """
+    try:
+        concensus_matces = []
+        filtered_matches = []
+        tracks = []
+        for idx, matches_list in enumerate(consecutive_matches):
+            m = matches_list[0]
+            prev_left_kp = m.queryIdx
+            cur_left_kp = m.trainIdx
+            if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping:
+
+                xl, yl = matcher.get_feature_location_frame(reference_kf, kp=prev_left_kp, loc=LEFT)
+                xr, yr = matcher.get_feature_location_frame(reference_kf, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
+
+                xl_n,yl_n = matcher.get_feature_location_frame(candidate_fk, kp=cur_left_kp, loc=LEFT)
+                xr_n,yr_n = matcher.get_feature_location_frame(candidate_fk, kp=cur_indices_mapping[cur_left_kp], loc=RIGHT)
+
+                feature_location_prev = (xl, xr, yl)
+                feature_location_cur = (xl_n, xr_n, yl_n)
+                tracks.append([feature_location_prev, feature_location_cur])
+
+                prev_left_ind = prev_left_kp
+                prev_right_ind = prev_indices_mapping[prev_left_kp]
+                cur_left_ind = cur_left_kp
+                cur_right_ind = cur_indices_mapping[cur_left_kp]
+                point_3d_prev = ind_to_3d_point_prev[prev_left_ind]
+                concensus_matces.append((prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind, point_3d_prev))
+                filtered_matches.append(matches_list)
+
+        return concensus_matces, tracks
+    except KeyError as e:
+        raise e
+
+
 def consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher, thresh=0.6):
     matcher.read_images(reference_kf)
-    small_track_db = TrackDatabase()
     prev_inlier_indices_mapping = exercise_4.match_next_pair(reference_kf, matcher)
     prev_points_cloud, prev_ind_to_3d_point_dict = exercise_4.get_3d_points_cloud(prev_inlier_indices_mapping, K,
                                                                        M1, M2, matcher,
@@ -257,43 +304,84 @@ def consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher
 
     consecutive_matches = matcher.match_between_any_frames(reference_kf, candidate_kf, thresh=thresh)
 
-    consensus_matches, filtered_matches = exercise_4.consensus_match(consecutive_matches, prev_indices_mapping,
-                                                          cur_indices_mapping, prev_ind_to_3d_point_dict, track_db,
-                                                          frameId, matcher)
+    consensus_matches, tracks = find_4_images_matches(consecutive_matches, prev_indices_mapping, cur_indices_mapping,
+                                                      prev_ind_to_3d_point_dict, matcher, reference_kf, candidate_kf)
 
+    if len(consensus_matches) < 10:
+        return None, None, None
     kp1, kp2 = matcher.get_kp(idx=candidate_kf)
-    Rt, inliers_ratio = exercise_4.ransac_for_pnp(consensus_matches, K, kp1, kp2, M2, thresh=2,
-                                       debug=False, max_iterations=1000)
+    Rt, inliers_ratio, supporter_indices = exercise_4.ransac_for_pnp(consensus_matches, K, kp1, kp2, M2, thresh=2,
+                                       debug=False, max_iterations=1000, return_supporters=True)
 
-    # Loop over all frames
-    for frameId in tqdm(range(num_of_frames-1)):
-        cur_inlier_indices_mapping = match_next_pair(frameId + 1, matcher)
-        cur_indices_mapping = array_to_dict(cur_inlier_indices_mapping)
-        cur_points_cloud, cur_ind_to_3d_point_dict = get_3d_points_cloud(cur_inlier_indices_mapping, k,
-                                                                         left_camera_extrinsic_mat, m2, matcher,
-                                                                         file_index=frameId + 1, debug=False)
+    if Rt is None:
+        return None, None, None
+    filtered_tracks = [track for i, track in enumerate(tracks) if supporter_indices[i]]
 
-        consecutive_matches = matcher.match_between_consecutive_frames(frameId, frameId + 1, thresh=thresh)
+    return Rt, filtered_tracks, inliers_ratio
 
-        # UPDATED: Note that the consensus_matche function is modified to work with the tracking DB mechanism (!)
-        consensus_matches, filtered_matches = consensus_match(consecutive_matches, prev_indices_mapping,
-                                                              cur_indices_mapping, prev_ind_to_3d_point_dict, track_db,
-                                                              frameId, matcher)
 
-        kp1, kp2 = matcher.get_kp(idx=frameId + 1)
-        Rt, inliers_ratio = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
-                            debug=False, max_iterations=1000)
-    return None, None
+def create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks):
+    landmarks = set()
+    factor_graph = gtsam.NonlinearFactorGraph()
+    initial_estimates = gtsam.Values()
+    # prior factor + first camera location
+    c0 = gtsam.symbol(CAMERA, reference_kf)
+    initial_estimates.insert(c0, gtsam.Pose3())
+    s = 0.1 * np.array([(3 * np.pi / 180), (3 * np.pi / 180), (3 * np.pi / 180)] + [.1, 0.01, 1.0])
+    prior_noise = gtsam.noiseModel.Diagonal.Sigmas(s)
+    factor_graph.add(gtsam.PriorFactorPose3(c0, gtsam.Pose3(), prior_noise))
+
+    # second camera initial location
+    c1 = gtsam.symbol(CAMERA, candidate_kf)
+    c1_cam_pose = gtsam.Pose3(exercise_5.invert_Rt_transformation(Rt)) # now pose should be from candidate to reference
+    initial_estimates.insert(c1, c1_cam_pose)
+
+    # 3d points locations + projection factors
+    for i, track in enumerate(filtered_tracks):
+        # triangulating the track point and adding it to initial_estimates
+        last_frame_camera = gtsam.StereoCamera(c1_cam_pose, GTSAM_K)
+        last_loc = track[-1]
+        last_point2 = gtsam.StereoPoint2(last_loc[0], last_loc[1], last_loc[2])
+        last_point3 = last_frame_camera.backproject(last_point2)
+        point_symbol = gtsam.symbol(POINT, i)
+        initial_estimates.insert(point_symbol, last_point3)
+        landmarks.add(point_symbol)
+
+        # creating projection factor on c0
+        first_loc = track[0]
+        measured_point2 = gtsam.StereoPoint2(first_loc[0], first_loc[1], first_loc[2])
+        stereomodel_noise = gtsam.noiseModel.Isotropic.Sigma(3, 0.1)
+        factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, c0, point_symbol, GTSAM_K)
+        factor_graph.add(factor)
+
+    return factor_graph, initial_estimates, landmarks
+
+
+def solve_trivial_bundle(reference_kf, candidate_kf, matching_data):
+    _, _, Rt, filtered_tracks, inliers_ratio = matching_data
+    factor_graph, initial_estimates, landmarks = create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks)
+    optimizer = gtsam.LevenbergMarquardtOptimizer(factor_graph, initial_estimates)
+    optimized_estimates = optimizer.optimize()
+
+    key_vectors = gtsam.KeyVector()
+    key_vectors.append(gtsam.symbol(CAMERA, candidate_kf))
+    key_vectors.append(gtsam.symbol(CAMERA, reference_kf))  # TODO maybe its the other way around...
+    bundle_joint_covariance = gtsam.Marginals(factor_graph, optimized_estimates)
+    information_mat_cick = bundle_joint_covariance.jointMarginalInformation(key_vectors).fullMatrix()
+    conditional_covariance = np.linalg.inv(information_mat_cick[6:, 6:])
+    relative_pose = get_relative_pose_between_frames(candidate_kf, reference_kf, optimized_estimates) # I think we want reference relative to candidate
+    return relative_pose, conditional_covariance, factor_graph, optimized_estimates
 
 
 def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estimates, matcher,
-                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=5):
+                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=5, req_inliers_ratio = 0.9):
     graph_for_shortest_path, edge_to_covariance = \
         init_graph_for_shortest_path(pose_graph=pose_graph, key_frames=key_frames, cond_matrices=cond_matrices)
     cur_pose_graph_estimates = pose_graph_initial_estimates
     # we loop over all key frames, and find possible loop closures for them
     min_md, min_md_index = np.inf, None
     good_ms = []
+    successful_lc = []
     for i in range(1, len(key_frames)):
         if i % 20 == 0:
             print(f"-------------- Starting Loop Closing the {i}th Key Frame -----------------")
@@ -321,10 +409,43 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
         best_candidates = candidates_with_small_m_distance[:max_candidates_num]
 
         # Step 2: perform consensus matching between current frame and relevant candidates
+        candidates_after_consensus_matching = []
+        should_optimize = False
         for candidate in best_candidates:
+            print(f"for the {i}th KeyFrame, found {len(best_candidates)} candidates to perform visual odometry with.")
             candidate_kf = key_frames[candidate]
-            Rt, inliers_ratio = consensus_matching_of_general_two_frames(reference_kf, candidate_kf)
-    a = 5
+            Rt, filtered_tracks, inliers_ratio = consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher)
+            if Rt is None:
+                print(f"didn't find good transformation between {i}th kf and {candidate}th kf")
+                continue
+            print(f"number of tracks between {i}th kf and {candidate}th kf after consensus matching is {len(filtered_tracks)}, with inliers ratio of {inliers_ratio}")
+            a = 5
+            if inliers_ratio > req_inliers_ratio:
+                # Step 3: We now optimize this guess by applying a small bundle on it
+                print(f"Solving small bundle for {i}-{candidate} with inliers ratio {inliers_ratio}")
+                matching_data = (reference_kf, candidate_kf, Rt, filtered_tracks, inliers_ratio)
+                candidates_after_consensus_matching.append(matching_data)
+                relative_pose, conditional_covariance, small_graph, small_graph_estimates = solve_trivial_bundle(reference_kf, candidate_kf, matching_data)
+                print(f"Small bundle error is {small_graph.error(small_graph_estimates)}")
+
+                # Step 4: we update the pose graph accordingly
+                c0 = gtsam.symbol(CAMERA, candidate_kf)
+                c1 = gtsam.symbol(CAMERA, reference_kf)
+                noise_cov = gtsam.noiseModel.Gaussian.Covariance(conditional_covariance)
+                pose_factor = gtsam.BetweenFactorPose3(c0, c1, relative_pose, noise_cov)
+                pose_graph.add(pose_factor)
+                edge_cost = edge_cost_func(conditional_covariance)
+                graph_for_shortest_path.add_edge(candidate, reference_kf, edge_cost)
+                successful_lc.append((i, candidate))
+                print(f"Successfully appended kfs ({i}-{candidate}) as a loop closure!")
+                should_optimize = True
+
+        if should_optimize:
+            optimizer = gtsam.LevenbergMarquardtOptimizer(pose_graph, cur_pose_graph_estimates)
+            cur_pose_graph_estimates = optimizer.optimize()
+            should_optimize = False
+    return pose_graph, cur_pose_graph_estimates, successful_lc
+
 
 
 
@@ -373,12 +494,9 @@ if __name__ == "__main__":
     kf_to_covariance = {key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
     cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
     our_trajectory = optimized_global_keyframes_poses
-    matcher_cache = track_db.get_matcher_cache()
-    matcher.set_cache(matcher_cache)
-    loop_closure(pose_graph, key_frames, matcher=matcher, cond_matrices=cond_matrices,
-                 mahalanobis_thresh=MAHALANOBIS_THRESH, pose_graph_initial_estimates=initial_estimates)
-
-
-
-
-    pass
+    # matcher_cache = track_db.get_matcher_cache()
+    # matcher.set_cache(matcher_cache)
+    pose_graph, cur_pose_graph_estimates, successful_lc = loop_closure(pose_graph, key_frames,
+                                                                       matcher=matcher, cond_matrices=cond_matrices,
+                                                                       mahalanobis_thresh=MAHALANOBIS_THRESH,
+                                                                       pose_graph_initial_estimates=initial_estimates)

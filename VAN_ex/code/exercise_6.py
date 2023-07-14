@@ -98,6 +98,7 @@ def get_conditional_covariance_matrix_between_keyframes(window, marginals):
 
 
 def get_relative_pose_between_frames(frame_a, frame_b, estimates):
+    # returns the transformation from frame_b world into frame_a world
     # Retrieve optimized poses for cameras ci and ck.
     camera_a = estimates.atPose3(gtsam.symbol(CAMERA, frame_a))
     camera_b = estimates.atPose3(gtsam.symbol(CAMERA, frame_b))
