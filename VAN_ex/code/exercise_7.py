@@ -170,7 +170,8 @@ def create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks)
     initial_estimates.insert(c0, c0_cam_pose)
     s = 0.1 * np.array([(3 * np.pi / 180), (3 * np.pi / 180), (3 * np.pi / 180)] + [.1, 0.01, 1.0])
     prior_noise = gtsam.noiseModel.Diagonal.Sigmas(s)
-    factor_graph.add(gtsam.PriorFactorPose3(c0, c0_cam_pose, prior_noise))
+    prior_factor = gtsam.PriorFactorPose3(c0, c0_cam_pose, prior_noise)
+    factor_graph.add(prior_factor)
 
     # second camera initial location
     c1 = gtsam.symbol(CAMERA, candidate_kf)
@@ -202,8 +203,11 @@ def solve_trivial_bundle(reference_kf, candidate_kf, matching_data):
     _, _, Rt, filtered_tracks, inliers_ratio = matching_data
     factor_graph, initial_estimates, landmarks = create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks)
     optimizer = gtsam.LevenbergMarquardtOptimizer(factor_graph, initial_estimates)
-    optimized_estimates = optimizer.optimize()
-
+    try:
+        optimized_estimates = optimizer.optimize()
+    except RuntimeError as e:
+        print(e)
+        return None
     key_vectors = gtsam.KeyVector()
     key_vectors.append(gtsam.symbol(CAMERA, candidate_kf))
     key_vectors.append(gtsam.symbol(CAMERA, reference_kf))  # TODO maybe its the other way around...
@@ -266,7 +270,12 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
                 print(f"Solving small bundle for {i}-{candidate} with inliers ratio {inliers_ratio}")
                 matching_data = (reference_kf, candidate_kf, Rt, filtered_tracks, inliers_ratio)
                 candidates_after_consensus_matching.append(matching_data)
-                relative_pose, conditional_covariance, small_graph, small_graph_estimates = solve_trivial_bundle(reference_kf, candidate_kf, matching_data)
+                res = solve_trivial_bundle(reference_kf, candidate_kf, matching_data)
+                if res is not None:
+                    relative_pose, conditional_covariance, small_graph, small_graph_estimates = res
+                else:
+                    print("Couldn't solve this trivial bundle for some reason... continuing.")
+                    continue
                 print(f"Small bundle error is {small_graph.error(small_graph_estimates)}")
 
                 # Step 4: we update the pose graph accordingly
@@ -277,6 +286,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
                 pose_graph.add(pose_factor)
                 edge_cost = edge_cost_func(conditional_covariance)
                 graph_for_shortest_path.add_edge(candidate, reference_kf, edge_cost)
+                edge_to_covariance[(candidate, reference_kf)] = conditional_covariance
                 successful_lc.append((i, candidate))
                 print(f"Successfully appended kfs ({i}-{candidate}) as a loop closure!")
                 should_optimize = True
