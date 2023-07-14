@@ -722,7 +722,7 @@ if __name__ == "__main__":
     _, track_db = exercise_4.track_camera_for_many_images()
     track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
-    q3()
+    #q3()
     #q1()
     #q2()
     # q2()

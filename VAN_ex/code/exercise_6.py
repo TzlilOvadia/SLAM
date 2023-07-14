@@ -27,6 +27,7 @@ GTSAM_K = utils.get_gtsam_calib_mat(K, M2)
 
 
 def load_bundle_results(path=None, force_recompute=False, debug=True):
+    import pickle
     if path is None:
         path = PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS
     if force_recompute:
@@ -185,7 +186,7 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
     if track_db is None:
         track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .85, track_db)
+    key_frames = criteria(list(frameIds.keys()), .8, track_db)
 
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window

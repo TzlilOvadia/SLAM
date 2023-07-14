@@ -190,6 +190,55 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
     return concensus_matces, filtered_matches
 
 
+def consensus_match_general_frames(consecutive_matches, prev_indices_mapping, cur_indices_mapping, ind_to_3d_point_prev,
+                    track_db: TrackDatabase, frameId: int, matcher: Matcher , reference_kf, candidate_kf):
+
+    concensus_matces = []
+    filtered_matches = []
+    track_db.prepare_to_next_pair(frameId)
+
+    for idx, matches_list in enumerate(consecutive_matches):
+
+        m = matches_list[0]
+        prev_left_kp = m.queryIdx
+        cur_left_kp = m.trainIdx
+
+        if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping:
+            xl, yl = matcher.get_feature_location_frame(frameId, kp=prev_left_kp, loc=LEFT)
+            xr, yr = matcher.get_feature_location_frame(frameId, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
+
+            xl_n,yl_n = matcher.get_feature_location_frame(frameId+1, kp=cur_left_kp, loc=LEFT)
+            xr_n,yr_n = matcher.get_feature_location_frame(frameId+1, kp=cur_indices_mapping[cur_left_kp], loc=RIGHT)
+
+            feature_location_prev = (xl, xr, yl)
+            feature_location_cur = (xl_n, xr_n, yl_n)
+            trackId = track_db.get_kp_trackId(prev_left_kp, frameId)
+
+            #  Every consnsused match is assigned as a new track with length of 2.
+            #  We start by appending the prev_left_ind, cur_left_ind to each track
+            #  -->> [] is updated to [prev_left_ind, cur_left_ind]
+            prev_left_ind = prev_left_kp
+
+
+            try:
+                point_3d_prev = ind_to_3d_point_prev[prev_left_ind]
+            except KeyError:
+                continue
+            if trackId is None:
+                trackId = track_db.generate_new_track_id()
+
+            track_db.add_track(trackId, frameId, feature_location_prev, feature_location_cur, prev_left_kp, cur_left_kp)
+
+            prev_left_ind = prev_left_kp
+            prev_right_ind = prev_indices_mapping[prev_left_kp]
+            cur_left_ind = cur_left_kp
+            cur_right_ind = cur_indices_mapping[cur_left_kp]
+            point_3d_prev = ind_to_3d_point_prev[prev_left_ind]
+            concensus_matces.append((prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind, point_3d_prev))
+            filtered_matches.append(matches_list)
+    return concensus_matces, filtered_matches
+
+
 def find_supporters(Rt, m2, consensus_matches, k, kp_left, kp_right, thresh=2, debug=True, file_index=0):
     are_good_matches = np.zeros(len(consensus_matches))
     num_good_matches = 0
