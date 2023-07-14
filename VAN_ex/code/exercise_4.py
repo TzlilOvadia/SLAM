@@ -232,7 +232,7 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
         candidate_4_points = random.sample(points_to_choose_from, k=num_points_for_model)
         candidate_Rt = solvePnP(kp_left, candidate_4_points, intrinsic_matrix, flags=cv2.SOLVEPNP_AP3P)
         if candidate_Rt is None:
-            print(i)
+            #print(i)
             i += 1
             continue
         are_supporters_boolean_array, num_good_matches = find_supporters(candidate_Rt, right_camera_matrix,
@@ -247,7 +247,7 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
             best_num_of_supporters = num_good_matches
         epsilon = min(1 - (num_good_matches / len(are_supporters_boolean_array)), .99)
         I = min(ransac_num_of_iterations(epsilon, 0.999), max_iterations)
-        print(f"at iteration {i} I={I}")
+        #print(f"at iteration {i} I={I}")
         i += 1
     # We now refine the winner by calculating a transformation for all the supporters/inliers
     if len(best_candidate_supporters_boolean_array) == 0:

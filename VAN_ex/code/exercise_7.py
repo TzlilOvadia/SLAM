@@ -13,7 +13,7 @@ from models.TrackDatabase import TrackDatabase
 from utils import utils
 from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches, draw_matches, plot_four_cameras, \
     draw_supporting_matches, plot_trajectories, plot_regions_around_matching_pixels, plot_dict, plot_connectivity_graph, \
-    gen_hist, plot_reprojection_errors, plot_localization_error_over_time, plot_projections_on_images, plot_trajectory_and_points, plot_2d_cameras_and_points
+    gen_hist, plot_reprojection_errors, plot_localization_error_over_time, plot_projections_on_images, plot_trajectory_and_points, plot_2d_cameras_and_points, draw_supporting_matches_general
 from utils.utils import *
 from matplotlib import pyplot as plt
 from models.Constants import *
@@ -125,7 +125,7 @@ def find_4_images_matches(consecutive_matches, prev_indices_mapping, cur_indices
                 concensus_matces.append((prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind, point_3d_prev))
                 filtered_matches.append(matches_list)
 
-        return concensus_matces, tracks
+        return concensus_matces, tracks, filtered_matches
     except KeyError as e:
         raise e
 
@@ -144,20 +144,20 @@ def consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher
 
     consecutive_matches = matcher.match_between_any_frames(reference_kf, candidate_kf, thresh=thresh)
 
-    consensus_matches, tracks = find_4_images_matches(consecutive_matches, prev_indices_mapping, cur_indices_mapping,
+    consensus_matches, tracks, filtered_matches = find_4_images_matches(consecutive_matches, prev_indices_mapping, cur_indices_mapping,
                                                       prev_ind_to_3d_point_dict, matcher, reference_kf, candidate_kf)
 
     if len(consensus_matches) < 10:
-        return None, None, None
+        return None, None, None, None, None
     kp1, kp2 = matcher.get_kp(idx=candidate_kf)
     Rt, inliers_ratio, supporter_indices = exercise_4.ransac_for_pnp(consensus_matches, K, kp1, kp2, M2, thresh=2,
                                        debug=False, max_iterations=1000, return_supporters=True)
 
     if Rt is None:
-        return None, None, None
+        return None, None, None, None, None
     filtered_tracks = [track for i, track in enumerate(tracks) if supporter_indices[i]]
 
-    return Rt, filtered_tracks, inliers_ratio
+    return Rt, filtered_tracks, inliers_ratio, filtered_matches, supporter_indices
 
 
 def create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks):
@@ -225,7 +225,9 @@ def solve_trivial_bundle(reference_kf, candidate_kf, matching_data):
 
 
 def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estimates, matcher,
-                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=5, req_inliers_ratio = 0.9):
+                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=5,
+                 req_inliers_ratio = 0.9, draw_supporting_matches_flag=False, points_to_stop_by=False,
+                 compare_to_gt=False, show_localization_error=False, show_uncertainty=False):
     graph_for_shortest_path, edge_to_covariance = \
         init_graph_for_shortest_path(pose_graph=pose_graph, key_frames=key_frames, cond_matrices=cond_matrices)
     cur_pose_graph_estimates = pose_graph_initial_estimates
@@ -233,6 +235,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
     min_md, min_md_index = np.inf, None
     good_ms = []
     successful_lc = []
+    prev_num_of_successful_lc = 0
     for i in range(1, len(key_frames)):
         if i % 20 == 0:
             print(f"-------------- Starting Loop Closing the {i}th Key Frame -----------------")
@@ -265,13 +268,16 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
         for candidate in best_candidates:
             print(f"for the {i}th KeyFrame, found {len(best_candidates)} candidates to perform visual odometry with.")
             candidate_kf = key_frames[candidate]
-            Rt, filtered_tracks, inliers_ratio = consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher)
+            Rt, filtered_tracks, inliers_ratio, matches, supporting_indices = consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher)
             if Rt is None:
                 print(f"didn't find good transformation between {i}th kf and {candidate}th kf")
                 continue
             print(f"number of tracks between {i}th kf and {candidate}th kf after consensus matching is {len(filtered_tracks)}, with inliers ratio of {inliers_ratio}")
             a = 5
             if inliers_ratio > req_inliers_ratio:
+                if draw_supporting_matches_flag:
+                    draw_supporting_matches_general(candidate_kf, reference_kf, matcher, matches, supporting_indices)
+                    draw_supporting_matches_flag = False
                 # Step 3: We now optimize this guess by applying a small bundle on it
                 print(f"Solving small bundle for {i}-{candidate} with inliers ratio {inliers_ratio}")
                 matching_data = (reference_kf, candidate_kf, Rt, filtered_tracks, inliers_ratio)
@@ -301,10 +307,92 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
             optimizer = gtsam.LevenbergMarquardtOptimizer(pose_graph, cur_pose_graph_estimates)
             cur_pose_graph_estimates = optimizer.optimize()
             should_optimize = False
+            if points_to_stop_by and (len(successful_lc) - prev_num_of_successful_lc) > 15:
+                plt.figure()
+                marginals = gtsam.Marginals(pose_graph, cur_pose_graph_estimates)
+                plot_helper.plot_trajectory(1, cur_pose_graph_estimates, marginals=marginals,
+                                            title=f"ex7_optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}", scale=1,
+                                            save_file=f"ex7_optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}")
+                prev_num_of_successful_lc = len(successful_lc)
+    if compare_to_gt:
+        plot_pg_locations_before_and_after_lc(pose_graph, cur_pose_graph_estimates, key_frames)
+    if show_localization_error:
+        plot_pg_locations_error_graph_before_and_after_lc(pose_graph, cur_pose_graph_estimates, key_frames)
+    if show_uncertainty:
+        a=5
+
     return pose_graph, cur_pose_graph_estimates, successful_lc
 
 
+def get_trajectory_from_graph(graph, values):
+    all_poses = gtsam.utilities.extractPose3(values).reshape(-1, 4, 3).transpose(0, 2, 1)
+    trajectory = all_poses[:, :, -1]
+    return trajectory
 
+
+def plot_trajectory_with_loops(camera_positions, loop_closures, path=""):
+    firsts = [lc[0] for lc in loop_closures]
+    seconds = [lc[1] for lc in loop_closures]
+    plt.figure()
+    plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
+    plt.scatter(x=camera_positions[firsts, 0], y=camera_positions[firsts, 2], color='green', label='first frame', s=10)
+    plt.scatter(x=camera_positions[seconds, 0], y=camera_positions[seconds, 2], color='red', label='second frame', s=10)
+    plt.xlabel("X")
+    plt.ylabel("Z")
+    plt.title(f"our trajectory with all loop closures")
+    plt.legend()
+    plt.savefig(path + f"lc_traj_with_all_loop_closures")
+
+
+def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after, key_frames):
+    bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+    key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
+    pose_graph, initial_estimates, landmarks = exercise_6.create_pose_graph(bundle_results,
+                                                                            optimized_relative_keyframes_poses,
+                                                                            optimized_global_keyframes_poses,
+                                                                            cond_matrices)
+    trajectory_after = get_trajectory_from_graph(pose_graph_after, values_after)
+    trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
+    gt_trajectory = get_gt_trajectory()[key_frames]
+
+    pose_graph_after_covariance = gtsam.Marginals(pose_graph_after, values_after)
+    pose_graph_before_covariance = gtsam.Marginals(pose_graph, initial_estimates)
+
+    plot_localization_error_over_time(key_frames, trajectory_after, gt_trajectory, path="lc_localization_error_graph_after")
+    plot_localization_error_over_time(key_frames, trajectory_before, gt_trajectory, path="lc_localization_error_graph_before")
+
+
+def plot_pg_locations_before_and_after_lc(pose_graph_after, values_after, key_frames):
+    bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+    key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
+    pose_graph, initial_estimates, landmarks = exercise_6.create_pose_graph(bundle_results,
+                                                                            optimized_relative_keyframes_poses,
+                                                                            optimized_global_keyframes_poses,
+                                                                            cond_matrices)
+    trajectory_after = get_trajectory_from_graph(pose_graph_after, values_after)
+    trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
+    gt_trajectory = get_gt_trajectory()[key_frames]
+    plot_trajectories(trajectory_before, gt_trajectory, path="lc_vs_gt_before", suffix="before_lc")
+    plot_trajectories(trajectory_after, gt_trajectory, path="lc_vs_gt_after", suffix="after_lc")
+
+
+
+def plot_pg_locations_error_graph_before_and_after_lc(pose_graph_after, values_after, key_frames):
+    bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+    key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
+    pose_graph, initial_estimates, landmarks = exercise_6.create_pose_graph(bundle_results,
+                                                                            optimized_relative_keyframes_poses,
+                                                                            optimized_global_keyframes_poses,
+                                                                            cond_matrices)
+    trajectory_after = get_trajectory_from_graph(pose_graph_after, values_after)
+    trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
+    gt_trajectory = get_gt_trajectory()[key_frames]
+
+    plot_localization_error_over_time(key_frames, trajectory_after, gt_trajectory, path="lc_localization_error_graph_after")
+    plot_localization_error_over_time(key_frames, trajectory_before, gt_trajectory, path="lc_localization_error_graph_before")
 
 
 
@@ -356,4 +444,10 @@ if __name__ == "__main__":
     pose_graph, cur_pose_graph_estimates, successful_lc = loop_closure(pose_graph, key_frames,
                                                                        matcher=matcher, cond_matrices=cond_matrices,
                                                                        mahalanobis_thresh=MAHALANOBIS_THRESH,
-                                                                       pose_graph_initial_estimates=initial_estimates)
+                                                                       pose_graph_initial_estimates=initial_estimates,
+                                                                       draw_supporting_matches_flag=True,
+                                                                       points_to_stop_by=True,
+                                                                       compare_to_gt=True)
+
+    # Printing the number of successful loop closures
+    print(f"Overall, {len(successful_lc)} loop closures were detected.")
