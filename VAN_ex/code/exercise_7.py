@@ -319,7 +319,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
     if show_localization_error:
         plot_pg_locations_error_graph_before_and_after_lc(pose_graph, cur_pose_graph_estimates, key_frames)
     if show_uncertainty:
-        a=5
+        plot_pg_uncertainty_before_and_after_lc(pose_graph, cur_pose_graph_estimates, key_frames)
 
     return pose_graph, cur_pose_graph_estimates, successful_lc
 
@@ -352,10 +352,6 @@ def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after, key_
                                                                             optimized_relative_keyframes_poses,
                                                                             optimized_global_keyframes_poses,
                                                                             cond_matrices)
-    trajectory_after = get_trajectory_from_graph(pose_graph_after, values_after)
-    trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
-    gt_trajectory = get_gt_trajectory()[key_frames]
-
     pose_graph_after_covariance = gtsam.Marginals(pose_graph_after, values_after)
     pose_graph_before_covariance = gtsam.Marginals(pose_graph, initial_estimates)
     after = []
