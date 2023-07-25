@@ -1,10 +1,7 @@
 import numpy as np
-from utils.utils import read_images
 import pickle
 import random
 import models.Constants as Constants
-import cv2
-from models import Matcher
 # noinspection PyCompatibility
 FEATURES = 1
 EVEN = 0
@@ -33,7 +30,29 @@ class TrackDatabase:
         self.ex_matrices = None
         self.matcher_cache = dict()
 
-    def add_track(self, trackId, frameId, feature_location_prev, feature_location_cur, kp_prev, kp_cur):
+    def update_tracks_from_frame(self, matcher, frameId, matches_kp_indices_and_3d_points):
+        self.prepare_to_next_pair(frameId)
+
+        for idx in range(len(matches_kp_indices_and_3d_points)):
+            prev_left_kp, prev_right_kp, cur_left_kp, cur_right_kp, _ = matches_kp_indices_and_3d_points[idx]
+            xl, yl = matcher.get_feature_location_frame(frameId, kp=prev_left_kp, loc=Constants.LEFT)
+            xr, yr = matcher.get_feature_location_frame(frameId, kp=prev_right_kp, loc=Constants.RIGHT)
+
+            xl_n, yl_n = matcher.get_feature_location_frame(frameId + 1, kp=cur_left_kp, loc=Constants.LEFT)
+            xr_n, yr_n = matcher.get_feature_location_frame(frameId + 1, kp=cur_right_kp, loc=Constants.RIGHT)
+
+            feature_location_prev = (xl, xr, yl)
+            feature_location_cur = (xl_n, xr_n, yl_n)
+
+            trackId = self.get_kp_trackId(prev_left_kp, frameId)
+            if trackId is None:
+                trackId = self.generate_new_track_id()
+            self.add_to_track(trackId, frameId, feature_location_prev, feature_location_cur, prev_left_kp,
+                              cur_left_kp)
+        return
+
+
+    def add_to_track(self, trackId, frameId, feature_location_prev, feature_location_cur, kp_prev, kp_cur):
         prev_feature = (kp_prev, feature_location_prev, frameId)
         cur_feature = (kp_cur, feature_location_cur, frameId + 1)
 
@@ -105,7 +124,7 @@ class TrackDatabase:
             'frame_id_to_inliers_ratio': self._frame_id_to_inliers_ratio,
             'ex_camera_positions': self.camera_positions,
             'ex_matrices': self.ex_matrices,
-            'matcher_cache': self.matcher_cache
+            # 'matcher_cache': self.matcher_cache
         }
         with open(file_path, 'wb') as f:
             pickle.dump(data, f)
@@ -127,10 +146,10 @@ class TrackDatabase:
                 self._frame_id_to_inliers_ratio = data['frame_id_to_inliers_ratio']
                 self.camera_positions = data['ex_camera_positions']
                 self.ex_matrices = data['ex_matrices']
-                try:
-                    self.matcher_cache = data['matcher_cache']
-                except KeyError:
-                    self.matcher_cache = None
+                # try:
+                    # self.matcher_cache = data['matcher_cache']
+                # except KeyError:
+                #     self.matcher_cache = None
             return Constants.SUCCESS
 
         except FileNotFoundError or PermissionError:

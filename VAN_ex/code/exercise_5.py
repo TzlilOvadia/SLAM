@@ -17,7 +17,7 @@ from models.Constants import *
 import gtsam
 from gtsam.utils import plot
 
-PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
+PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker_1"
 K, M1, M2 = utils.read_cameras()
 GTSAM_K = utils.get_gtsam_calib_mat(K, M2)
 
@@ -138,7 +138,8 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
         # Check whether the track is too short
         track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
         track_starts_in_frame_id = track_data[0][FRAME_ID]
-        if track_ends_in_frame_id < bundle_ends_in_frame_id or bundle_starts_in_frame_id < track_starts_in_frame_id:
+        # if track_ends_in_frame_id < bundle_ends_in_frame_id or bundle_starts_in_frame_id < track_starts_in_frame_id:
+        if track_ends_in_frame_id < bundle_ends_in_frame_id:
             continue
 
         # TODO original code uses a 2d point coordinates from last frame of track, but uses the cam_pose of the last frame in the bundle... wrong
@@ -571,8 +572,12 @@ def q3():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .8, track_db)
-
+    key_frames = criteria(list(frameIds.keys()), .87, track_db)
+    prev = key_frames[0]
+    for frame in key_frames[1:]:
+        if frame-prev < 5:
+            print(f"window size is {frame-prev}")
+        prev = frame
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window
     num_factor_in_bundles = []

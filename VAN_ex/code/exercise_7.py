@@ -24,14 +24,13 @@ from models import Constants
 import exercise_4, exercise_6, exercise_3, exercise_5
 from exercise_4 import track_camera_for_many_images
 from exercise_6 import *
-PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
+PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker_1"
 PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "../../models/bundle_adjustment_results"
 K, M1, M2 = utils.read_cameras()
 GTSAM_K = utils.get_gtsam_calib_mat(K, M2)
 
 from collections import defaultdict
 import heapq
-import numpy as np
 from collections import defaultdict
 from heapq import heappop, heappush
 import dijkstar
@@ -58,15 +57,19 @@ def edge_cost_func(cond_mat=None, equal=False):
 def init_graph_for_shortest_path(pose_graph, key_frames, cond_matrices):
     graph_for_shortest_path = dijkstar.Graph()
     edge_to_covariance = {}
+    costs = []
     for i in range(len(key_frames) - 1):
         first = key_frames[i]
         second = key_frames[i + 1]
         c0 = gtsam.symbol(Constants.CAMERA, first)
         c1 = gtsam.symbol(Constants.CAMERA, second)
         edge_cost = edge_cost_func(cond_matrices[i])
-        print(edge_cost)
+        costs.append(edge_cost)
+        # print(edge_cost)
         graph_for_shortest_path.add_edge(first, second, edge_cost)
         edge_to_covariance[(first, second)] = cond_matrices[i]
+    costs = sorted(costs)
+    print(costs[len(costs)//10])
     return graph_for_shortest_path, edge_to_covariance
 
 
@@ -151,7 +154,7 @@ def consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher
         return None, None, None, None, None
     kp1, kp2 = matcher.get_kp(idx=candidate_kf)
     Rt, inliers_ratio, supporter_indices = exercise_4.ransac_for_pnp(consensus_matches, K, kp1, kp2, M2, thresh=2,
-                                       debug=False, max_iterations=1000, return_supporters=True)
+                                       debug=False, max_iterations=500, return_supporters=True)
 
     if Rt is None:
         return None, None, None, None, None

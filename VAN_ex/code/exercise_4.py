@@ -16,7 +16,7 @@ from models.Constants import *
 
 def track_camera_for_many_images(thresh=0.6):
     k, m1, m2 = utils.read_cameras()
-    matcher = Matcher(algo=cv2.AKAZE_create(),display=VERTICAL_REPRESENTATION)
+    matcher = Matcher(display=VERTICAL_REPRESENTATION)
     num_of_frames = 2560
     extrinsic_matrices = np.zeros(shape=(num_of_frames, 3, 4))
     camera_positions = np.zeros(shape=(num_of_frames, 3))
@@ -46,13 +46,17 @@ def track_camera_for_many_images(thresh=0.6):
         consecutive_matches = matcher.match_between_consecutive_frames(frameId, frameId + 1, thresh=thresh)
 
         # UPDATED: Note that the consensus_matche function is modified to work with the tracking DB mechanism (!)
-        consensus_matches, filtered_matches = consensus_match(consecutive_matches, prev_indices_mapping,
-                                                              cur_indices_mapping, prev_ind_to_3d_point_dict, track_db,
-                                                              frameId, matcher)
+        matches_that_appear_in_all_4_images, filtered_matches = get_matches_that_appear_in_all_4_images(consecutive_matches, prev_indices_mapping,
+                                                                                      cur_indices_mapping, prev_ind_to_3d_point_dict, track_db,
+                                                                                      frameId, matcher)
 
         kp1, kp2 = matcher.get_kp(idx=frameId + 1)
-        Rt, inliers_ratio = ransac_for_pnp(consensus_matches, k, kp1, kp2, m2, thresh=2,
-                            debug=False, max_iterations=1000)
+        Rt, inliers_ratio, are_supporters_boolean_array = ransac_for_pnp(matches_that_appear_in_all_4_images, k, kp1, kp2, m2, thresh=2,
+                            debug=False, max_iterations=1000, return_supporters=True)
+        assert are_supporters_boolean_array is not None, f"RANSAC Couldn't find a transformation from frame {frameId} to frame {frameId + 1}..."
+        Rt_inliers = [point_to_choose for ind, point_to_choose in enumerate(matches_that_appear_in_all_4_images) if
+                  are_supporters_boolean_array[ind]]
+        track_db.update_tracks_from_frame(matcher, frameId, Rt_inliers)
         track_db.add_inliers_ratio(frameId, inliers_ratio)
         # track_db.add_inliers_ratio(frameId, Rt)
         R, t = Rt[:, :-1], Rt[:, -1]
@@ -66,7 +70,7 @@ def track_camera_for_many_images(thresh=0.6):
         track_db.set_ex_camera_positions(camera_positions)
         track_db.set_ex_matrices(extrinsic_matrices)
 
-    track_db.set_matcher(matcher_cache=matcher.get_matcher_cache())
+    # track_db.set_matcher(matcher_cache=matcher.get_matcher_cache())
     return camera_positions, track_db
 
 
@@ -77,7 +81,7 @@ def match_next_pair(cur_file, matcher):
 
 def find_stereo_matches(matcher, file_index):
     matcher.detect_and_compute(file_index)
-    matcher.find_matching_features(with_significance_test=True)
+    matcher.find_matching_features(with_significance_test=False)
     matches = matcher.get_matches(file_index)
     filtered_matches = matcher.get_filtered_matches(file_index)
 
@@ -111,8 +115,8 @@ def get_3d_points_cloud(inlier_indices_mapping, k, m1, m2, matcher, file_index=0
     return inlier_points_in_3d, ind_to_3d_point_dict
 
 
-def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mapping, ind_to_3d_point_prev,
-                    track_db: TrackDatabase, frameId: int, matcher: Matcher):
+def get_matches_that_appear_in_all_4_images(consecutive_matches, prev_indices_mapping, cur_indices_mapping, ind_to_3d_point_prev,
+                                            track_db: TrackDatabase, frameId: int, matcher: Matcher):
     """
     * Given prev_left_ind, prev_right_ind, cur_left_ind, cur_right_ind
     ** Consider the first iteration, i.e., the consensus match between the 0th and the 1st frames:
@@ -146,40 +150,13 @@ def consensus_match(consecutive_matches, prev_indices_mapping, cur_indices_mappi
 
     concensus_matces = []
     filtered_matches = []
-    track_db.prepare_to_next_pair(frameId)
-
     for idx, matches_list in enumerate(consecutive_matches):
-
         m = matches_list[0]
         prev_left_kp = m.queryIdx
         cur_left_kp = m.trainIdx
-
         if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping:
-            xl, yl = matcher.get_feature_location_frame(frameId, kp=prev_left_kp, loc=LEFT)
-            xr, yr = matcher.get_feature_location_frame(frameId, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)
-
-            xl_n,yl_n = matcher.get_feature_location_frame(frameId+1, kp=cur_left_kp, loc=LEFT)
-            xr_n,yr_n = matcher.get_feature_location_frame(frameId+1, kp=cur_indices_mapping[cur_left_kp], loc=RIGHT)
-
-            feature_location_prev = (xl, xr, yl)
-            feature_location_cur = (xl_n, xr_n, yl_n)
-            trackId = track_db.get_kp_trackId(prev_left_kp, frameId)
-
-            #  Every consnsused match is assigned as a new track with length of 2.
-            #  We start by appending the prev_left_ind, cur_left_ind to each track
-            #  -->> [] is updated to [prev_left_ind, cur_left_ind]
             prev_left_ind = prev_left_kp
-
-
-            try:
-                point_3d_prev = ind_to_3d_point_prev[prev_left_ind]
-            except KeyError:
-                continue
-            if trackId is None:
-                trackId = track_db.generate_new_track_id()
-
-            track_db.add_track(trackId, frameId, feature_location_prev, feature_location_cur, prev_left_kp, cur_left_kp)
-
+            assert prev_left_ind in ind_to_3d_point_prev, f"prev_left_ind={prev_left_ind} not in ind_to_3d_point_prev for some reason..."
             prev_left_ind = prev_left_kp
             prev_right_ind = prev_indices_mapping[prev_left_kp]
             cur_left_ind = cur_left_kp
@@ -245,7 +222,7 @@ def ransac_for_pnp(points_to_choose_from, intrinsic_matrix, kp_left, kp_right, r
             best_candidate_supporters_boolean_array = are_supporters_boolean_array
             best_Rt_candidate = candidate_Rt
             best_num_of_supporters = num_good_matches
-        epsilon = min(1 - (num_good_matches / len(are_supporters_boolean_array)), .99)
+        epsilon = min(epsilon, 1 - (num_good_matches / len(are_supporters_boolean_array)))
         I = min(ransac_num_of_iterations(epsilon, 0.999), max_iterations)
         #print(f"at iteration {i} I={I}")
         i += 1
@@ -286,13 +263,17 @@ def ransac_num_of_iterations(epsilon=0.99, p=0.99, s=4):
 def solvePnP(kp, corresponding_points, camera_intrinsic, flags=0):
     points_3d = np.array([m[4] for m in corresponding_points])
     points_2d = np.array([kp[m[2]].pt for m in corresponding_points])
-    success, R_vec, t_vec = cv2.solvePnP(points_3d, points_2d, camera_intrinsic, None, flags=flags)
-    if success:
-        camera_extrinsic = rodriguez_to_mat(R_vec, t_vec)
-        return camera_extrinsic
-    else:
+    # print(f"points_3d:\n{points_3d}\n\n")
+    # print(f"points_2d:\n{points_2d}\n\n")
+    try:
+        success, R_vec, t_vec = cv2.solvePnP(points_3d, points_2d, camera_intrinsic, None, flags=flags)
+        if success:
+            camera_extrinsic = rodriguez_to_mat(R_vec, t_vec)
+            return camera_extrinsic
+        else:
+            return None
+    except:
         return None
-
 
 def rodriguez_to_mat(rvec, tvec):
     rot, _ = cv2.Rodrigues(rvec)
@@ -433,12 +414,12 @@ def q7(path, length=10):
 
 if __name__ == "__main__":
     PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker_1"
-    track_db = TrackDatabase()
-    deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
-    if deserialization_result == FAILURE:
-        _, track_db = track_camera_for_many_images()
-        track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
-
+    # track_db = TrackDatabase()
+    # deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
+    # if deserialization_result == FAILURE:
+    _, track_db = track_camera_for_many_images()
+    track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+    print("finished serializing")
     q1(PATH_TO_SAVE_TRACKER_FILE)
     q2(PATH_TO_SAVE_TRACKER_FILE)
     q3(PATH_TO_SAVE_TRACKER_FILE, num_to_show=10)
