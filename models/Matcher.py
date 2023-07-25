@@ -139,6 +139,7 @@ class Matcher:
         else:
             matches = self.matcher.knnMatch(self._img1_dsc, self._img2_dsc, k=1)
             self._matches = matches
+            self._filtered_matches = matches
 
         self.cache[self._file_index][MATCHES] = self._matches
         self.cache[self._file_index][FILTERED_MATCHES] = self._filtered_matches
@@ -217,7 +218,6 @@ class Matcher:
         other_frame_img = self.cache[other_frame][FRAMES][0]
         matches = self.matcher.knnMatch(reference_dsc, other_dsc, k=2)
         filtered = Matcher.apply_thresholds(matches, thresh)
-        ratio = len(matches) / len(filtered)
         if debug:
             draw_matches(filtered, reference_frame_img, other_frame_img, prev_kps, cur_kps, num_of_matches=5000,
                          debug=debug, display=VERTICAL_REPRESENTATION)

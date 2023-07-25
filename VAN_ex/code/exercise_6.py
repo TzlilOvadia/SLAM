@@ -20,7 +20,7 @@ from gtsam.utils import plot
 import utils.plot as plot_helper
 
 
-PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
+PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker_1"
 PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "../../models/bundle_adjustment_results"
 K, M1, M2 = utils.read_cameras()
 GTSAM_K = utils.get_gtsam_calib_mat(K, M2)
@@ -55,7 +55,7 @@ def q1():
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .8, track_db)
+    key_frames = criteria(list(frameIds.keys()), .85, track_db)
     bundle_windows = get_bundle_windows(key_frames)
 
     # Step 2: Define Bundle Optimization
@@ -187,7 +187,7 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
     if track_db is None:
         track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
-    key_frames = criteria(list(frameIds.keys()), .8, track_db)
+    key_frames = criteria(list(frameIds.keys()), .87, track_db)
 
     bundle_windows = get_bundle_windows(key_frames)
     # Step 2: Solve Every Bundle Window
@@ -260,11 +260,13 @@ if __name__ == '__main__':
     # load tracking data
     s = gtsam.StereoCamera()
     track_db = TrackDatabase()
+    # cp, track_db = exercise_4.track_camera_for_many_images()
+    # track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+    # exit()
     deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
     if deserialization_result == FAILURE:
         _, track_db = exercise_4.track_camera_for_many_images()
         track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
-
     # solve exercise questions
     q1()
     q2(force_recompute=False, debug=True)
