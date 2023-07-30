@@ -4,6 +4,7 @@ import random
 import utils.utils as utils
 from models.Matcher import Matcher
 from utils.plotters import gen_hist, draw_inlier_and_outlier_matches, draw_3d_points
+from utils.utils import least_squares
 
 
 def calc_y_coord_deviations(y1, y2):
@@ -59,43 +60,6 @@ def rectificatied_stereo_pattern(y1, y2, thresh=1):
     img1in, img2in = indices_mapping[0, inliers_idx], indices_mapping[1, inliers_idx]
     img1out, img2out = indices_mapping[0, outliers_idx], indices_mapping[1, outliers_idx]
     return img1in, img2in, img1out, img2out
-
-
-def least_squares(p1, p2, Pmat, Qmat):
-    """
-    Least Squares algorithm as learned in class
-    :param p1: (x,y) Point in the left image
-    :param p2: (x,y) Point in the right image
-    :param Pmat: Left image matrix
-    :param Qmat: Right image matrix
-    :return:
-    """
-    x1, y1 = p1
-    x2, y2 = p2
-
-    P1 = Pmat[0, :]
-    P2 = Pmat[1, :]
-    P3 = Pmat[2, :]
-    Q1 = Qmat[0, :]
-    Q2 = Qmat[1, :]
-    Q3 = Qmat[2, :]
-
-    # Computing the 'A' matrix from the solution of Ax=0
-    A = np.array([x1 * P3 - P1,
-         y1 * P3 - P2,
-         x2 * Q3 - Q1,
-         y2 * Q3 - Q2])
-
-    # Compute the SVD solution for A matrix
-    u, s, vh = np.linalg.svd(A)
-
-    # We saw in class that the solution is located in the last column of vh:
-    solution_4d = vh[-1]
-
-    # Transform from 4d to 3d:
-    solution_3d = solution_4d[:3] / solution_4d[-1]
-    return solution_3d
-
 
 
 if __name__ == '__main__':

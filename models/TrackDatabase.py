@@ -146,10 +146,7 @@ class TrackDatabase:
                 self._frame_id_to_inliers_ratio = data['frame_id_to_inliers_ratio']
                 self.camera_positions = data['ex_camera_positions']
                 self.ex_matrices = data['ex_matrices']
-                # try:
-                    # self.matcher_cache = data['matcher_cache']
-                # except KeyError:
-                #     self.matcher_cache = None
+
             return Constants.SUCCESS
 
         except FileNotFoundError or PermissionError:
