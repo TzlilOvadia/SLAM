@@ -124,7 +124,7 @@ def q7(path, length=10):
 
 
 if __name__ == "__main__":
-    PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
+    PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker_3"
     track_db = TrackDatabase()
     deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
     if deserialization_result == FAILURE:

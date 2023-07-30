@@ -276,7 +276,6 @@ def track_camera_for_many_images(thresh=0.6):
                   are_supporters_boolean_array[ind]]
         track_db.update_tracks_from_frame(matcher, frameId, Rt_inliers)
         track_db.add_inliers_ratio(frameId, inliers_ratio)
-        # track_db.add_inliers_ratio(frameId, Rt)
         R, t = Rt[:, :-1], Rt[:, -1]
         new_R = R @ extrinsic_matrices[frameId][:, :-1]
         new_t = R @ extrinsic_matrices[frameId][:, -1] + t
@@ -288,7 +287,6 @@ def track_camera_for_many_images(thresh=0.6):
         track_db.set_ex_camera_positions(camera_positions)
         track_db.set_ex_matrices(extrinsic_matrices)
 
-    # track_db.set_matcher(matcher_cache=matcher.get_matcher_cache())
     return camera_positions, track_db
 
 

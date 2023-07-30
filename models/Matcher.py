@@ -197,7 +197,7 @@ class Matcher:
         prev_im1 = self.cache[prev_frame_index][FRAMES][0]
         cur_im1 = self.cache[cur_frame_index][FRAMES][0]
         matches = self.matcher.knnMatch(prev_dsc, cur_dsc, k=2)
-        filtered = Matcher.apply_thresholds(matches, thresh)
+        # filtered = Matcher.apply_thresholds(matches, thresh)
         self.cache[cur_frame_index][CONSECUTIVE] = filtered
         if debug:
             draw_matches(filtered, prev_im1, cur_im1, prev_kps, cur_kps, num_of_matches=5000, debug=debug, display=VERTICAL_REPRESENTATION)

@@ -7,7 +7,7 @@ from utils.utils import read_cameras, get_gtsam_calib_mat, get_3d_points_cloud
 from utils import plot
 from models import Constants
 from models.BundleAdjustment import *
-from models.Constants import LEFT, RIGHT, CAMERA, POINT, MAHALANOBIS_THRESH
+from models.Constants import *
 from utils.plotters import plot_uncertainty_over_time, plot_trajectories, plot_localization_error_over_time
 from utils.utils import array_to_dict, read_images, get_gt_trajectory
 K, M1, M2 = read_cameras()
@@ -287,17 +287,18 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
             if points_to_stop_by and (len(successful_lc) - prev_num_of_successful_lc) > 15:
                 marginals = gtsam.Marginals(pose_graph, cur_pose_graph_estimates)
                 plot.plot_trajectory(1, cur_pose_graph_estimates, marginals=marginals,
-                                            title=f"optimized estimates trajectory with cov after: {len(successful_lc)} updates", scale=1,
-                                            save_file=f"ex7_optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}")
+                                     title=f"optimized estimates trajectory with cov after: {len(successful_lc)} updates", scale=1,
+                                     save_file=f"../plots/optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}")
                 prev_num_of_successful_lc = len(successful_lc)
 
 
     if compare_to_gt:
-        plot_pg_locations_before_and_after_lc(pose_graph, cur_pose_graph_estimates, key_frames)
+        plot_pg_locations_before_and_after_lc(pose_graph, cur_pose_graph_estimates)
     if show_localization_error:
-        plot_pg_locations_error_graph_before_and_after_lc(pose_graph, cur_pose_graph_estimates, key_frames)
+        plot_pg_locations_error_graph_before_and_after_lc(pose_graph, cur_pose_graph_estimates)
     if show_uncertainty:
-        plot_pg_uncertainty_before_and_after_lc(pose_graph, cur_pose_graph_estimates, key_frames)
+        plot_pg_uncertainty_before_and_after_lc(pose_graph, cur_pose_graph_estimates)
+    print(f"Overall, {len(successful_lc)} loop closures were detected.")
 
     return pose_graph, cur_pose_graph_estimates, successful_lc
 
@@ -308,7 +309,7 @@ def get_trajectory_from_graph(graph, values):
     return trajectory
 
 
-def plot_trajectory_with_loops(camera_positions, loop_closures, path=""):
+def plot_trajectory_with_loops(camera_positions, loop_closures, path="plots/"):
     firsts = [lc[0] for lc in loop_closures]
     seconds = [lc[1] for lc in loop_closures]
     plt.figure()
@@ -322,9 +323,9 @@ def plot_trajectory_with_loops(camera_positions, loop_closures, path=""):
     plt.savefig(path + f"lc_traj_with_all_loop_closures")
 
 
-def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after, key_frames):
+def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
-    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)[-1]
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     pose_graph, initial_estimates, landmarks = models.BundleAdjustment.create_pose_graph(bundle_results,
                                                                                          optimized_relative_keyframes_poses,
@@ -344,13 +345,13 @@ def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after, key_
     after_score = [np.abs(np.linalg.det(cov)) for cov in after]
     before_score = [np.abs(np.linalg.det(cov)) for cov in before]
 
-    plot_uncertainty_over_time(key_frames, after_score, "lc_uncertainty_after", "(after)")
-    plot_uncertainty_over_time(key_frames, before_score, "lc_uncertainty_before", "(before)")
+    plot_uncertainty_over_time(key_frames, after_score, "../plots/lc_uncertainty_after", "(after)")
+    plot_uncertainty_over_time(key_frames, before_score, "../plots/lc_uncertainty_before", "(before)")
 
 
-def plot_pg_locations_before_and_after_lc(pose_graph_after, values_after, key_frames):
+def plot_pg_locations_before_and_after_lc(pose_graph_after, values_after):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
-    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)[-1]
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     pose_graph, initial_estimates, landmarks = models.BundleAdjustment.create_pose_graph(bundle_results,
                                                                                          optimized_relative_keyframes_poses,
@@ -359,13 +360,13 @@ def plot_pg_locations_before_and_after_lc(pose_graph_after, values_after, key_fr
     trajectory_after = get_trajectory_from_graph(pose_graph_after, values_after)
     trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
     gt_trajectory = get_gt_trajectory()[key_frames]
-    plot_trajectories(trajectory_before, gt_trajectory, path="lc_vs_gt_before", suffix="before_lc")
-    plot_trajectories(trajectory_after, gt_trajectory, path="lc_vs_gt_after", suffix="after_lc")
+    plot_trajectories(trajectory_before, gt_trajectory, path="../plots/lc_vs_gt_before", suffix="before_lc")
+    plot_trajectories(trajectory_after, gt_trajectory, path="../plots/lc_vs_gt_after", suffix="after_lc")
 
 
-def plot_pg_locations_error_graph_before_and_after_lc(pose_graph_after, values_after, key_frames):
+def plot_pg_locations_error_graph_before_and_after_lc(pose_graph_after, values_after):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
-    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)[-1]
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     pose_graph, initial_estimates, landmarks = models.BundleAdjustment.create_pose_graph(bundle_results,
                                                                                          optimized_relative_keyframes_poses,
@@ -375,11 +376,11 @@ def plot_pg_locations_error_graph_before_and_after_lc(pose_graph_after, values_a
     trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
     gt_trajectory = get_gt_trajectory()[key_frames]
 
-    plot_localization_error_over_time(key_frames, trajectory_after, gt_trajectory, path="lc_localization_error_graph_after")
-    plot_localization_error_over_time(key_frames, trajectory_before, gt_trajectory, path="lc_localization_error_graph_before")
+    plot_localization_error_over_time(key_frames, trajectory_after, gt_trajectory, path=PATH_TO_SAVE_LOCALIZATION_ERROR_LOOP_CLOSURE_AFTER)
+    plot_localization_error_over_time(key_frames, trajectory_before, gt_trajectory, path=PATH_TO_SAVE_LOCALIZATION_ERROR_LOOP_CLOSURE_BEFORE)
 
 
-def plot_loop_between_two_frames(our_trajectory, first, second, key_frames, path="lc_"):
+def plot_loop_between_two_frames(our_trajectory, first, second, key_frames, path="plots/lc_"):
     camera_positions = np.array([pose.translation() for pose in our_trajectory])
     plt.figure()
     plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
@@ -401,4 +402,4 @@ def draw_matching_images(first, second, key_frames):
     plt.figure(figsize=(16, 9))
     plt.imshow(img3)
     plt.title(f"compare image {file_index1} and {file_index2}")
-    plt.savefig(f"lc_compare_images_{first}_{second}")
+    plt.savefig(f"plots/lc_compare_images_{first}_{second}")

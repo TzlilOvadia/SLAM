@@ -3,7 +3,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 import utils.utils
-from models.Constants import LAST_ITEM, FRAME_ID, LOCATIONS_IDX, POINT, CAMERA,PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS, PATH_TO_SAVE_TRACKER_FILE
+from models.Constants import *
 from models.TrackDatabase import TrackDatabase
 from utils.plotters import plot_trajectories
 from utils.utils import invert_Rt_transformation, get_gt_trajectory
@@ -401,7 +401,7 @@ def load_bundle_results(path=None, force_recompute=False, debug=True):
             bundle_windows = bundle_adjustment_results["bundle_windows"]
             cond_matrices = bundle_adjustment_results["cond_matrices"]
             print(f"Found File At {path}, loaded bundle adjustment results...")
-    except Exception:
+    except FileNotFoundError:
         print(f"No File Exists In {path}")
         print("Recomputing Bundle Adjustment ...")
         return bundle_adjustment(path_to_serialize=path, debug=debug, plot_results=True)
@@ -480,9 +480,9 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
     :param track_db: The tracking data.
     :return: Results of bundle adjustment
     """
-    PATH_TO_SAVE_COMPARISON_TO_GT = "q3_compare_to_ground_truth"
-    PATH_TO_SAVE_LOCALIZATION_ERROR = "q3_localization_error"
-    PATH_TO_SAVE_2D_TRAJECTORY = "q3_2d_view_of_the_entire_scene"
+    PATH_TO_SAVE_COMPARISON_TO_GT = "../plots/compare_to_ground_truth"
+    PATH_TO_SAVE_LOCALIZATION_ERROR = "../plots/localization_error"
+    PATH_TO_SAVE_2D_TRAJECTORY = "../plots/2d_view_of_the_entire_scene"
 
     # Step 1: Initialize TrackDatabase and Select meaningful Keyframes
     if track_db is None:
@@ -492,6 +492,7 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
     if deserialization_result == FAILURE:
         _, track_db = utils.utils.track_camera_for_many_images()
         track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+        print("serialization is done!")
 
     frameIds = track_db.get_frameIds()
     key_frames = key_frames_by_percentile(list(frameIds.keys()), .87, track_db)
@@ -547,6 +548,16 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
         gt_camera_positions = get_gt_trajectory()[np.array(key_frames)]
         plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
                           points_3d=global_3d_points_numpy, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+
+        # Step 6: Presenting KeyFrame Localization Over Time
+        plot_localization_error_over_time(key_frames, camera_positions=global_Rt_poses_in_numpy,
+                                          gt_camera_positions=gt_camera_positions, path=PATH_TO_SAVE_LOCALIZATION_ERROR)
+        plt.savefig(PATH_TO_SAVE_LOCALIZATION_ERROR)
+
+        # Step 7: Presenting a View From Above (in 2d) of the Scene, With Keyframes and 3d Points
+        plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
+                          path=PATH_TO_SAVE_COMPARISON_TO_GT)
+        plt.savefig(PATH_TO_SAVE_2D_TRAJECTORY)
 
     if path_to_serialize:
         import pickle

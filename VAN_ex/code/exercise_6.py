@@ -17,7 +17,7 @@ GTSAM_K = utils.get_gtsam_calib_mat(K, M2)
 
 def q1():
     PATH_FOR_TRAJECTORY_WITH_COVARIANCES = "ex6_q1_trajectory"
-    # PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
+    # PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker_3"
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()

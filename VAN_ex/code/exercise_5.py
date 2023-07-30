@@ -204,15 +204,12 @@ def q3():
     # Step 7: Presenting a View From Above (in 2d) of the Scene, With Keyframes and 3d Points
     plot_trajectories(camera_positions=global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions, points_3d=global_3d_points_numpy, path=PATH_TO_SAVE_COMPARISON_TO_GT)
 
-    #TODO I DIDN'T PRESENT YET A VIEW FROM OF THE SCENE WITH THE 3d POINTS (I ONLY ADDED THE CAMERA LOCATIONS). I'm not sure exactly what is required
-    a = 5  # for you
-
 
 def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None):
     PATH_TO_SAVE_COMPARISON_TO_GT = "q3_compare_to_ground_truth"
     PATH_TO_SAVE_LOCALIZATION_ERROR = "q3_localization_error"
     PATH_TO_SAVE_2D_TRAJECTORY = "q3_2d_view_of_the_entire_scene"
-    print("\n\n\n\n\n")
+
     # Step 1: Select Keyframes
     track_db = TrackDatabase(PATH_TO_SAVE_TRACKER_FILE)
     frameIds = track_db.get_frameIds()
