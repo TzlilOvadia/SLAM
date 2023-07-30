@@ -2,12 +2,10 @@ import random
 
 import cv2
 import numpy as np
-from VAN_ex.code.exercise_2 import least_squares
 from models.Matcher import Matcher
 from utils import utils
-from utils.plotters import draw_3d_points, draw_inlier_and_outlier_matches,draw_matches, plot_four_cameras, draw_supporting_matches, plot_trajectories
-from utils.utils import rectificatied_stereo_pattern, coords_from_kps, array_to_dict, read_images
-from matplotlib import pyplot as plt
+from utils.plotters import draw_3d_points, plot_four_cameras, draw_supporting_matches, plot_trajectories
+from utils.utils import rectificatied_stereo_pattern, array_to_dict, get_gt_trajectory, least_squares
 import time
 
 
@@ -277,15 +275,6 @@ def track_camera_for_many_images(thresh=0.4):
     total_time = end_time - start_time
     print(f"running for {num_of_frames} frames took {total_time} seconds")
     return camera_positions
-
-
-def get_gt_trajectory():
-    gt_extrinsic_matrices = utils.read_gt()
-    gt_camera_positions = np.zeros(shape=(gt_extrinsic_matrices.shape[0], 3))
-    for i in range(1, gt_camera_positions.shape[0]):
-        R_cum, t_cum = gt_extrinsic_matrices[i][:, :-1], gt_extrinsic_matrices[i][:, -1]
-        gt_camera_positions[i] = - R_cum.T @ t_cum
-    return gt_camera_positions
 
 
 #------------------------------------------------- EXERCISE QUESTIONS ---------------------------------------
