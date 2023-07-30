@@ -5,8 +5,10 @@ from scipy.spatial.transform import Rotation
 import utils.utils
 from models.Constants import *
 from models.TrackDatabase import TrackDatabase
-from utils.plotters import plot_trajectories
+from utils.plotters import plot_trajectories, plot_localization_error_over_time
 from utils.utils import invert_Rt_transformation, get_gt_trajectory
+import matplotlib.pyplot as plt
+
 
 compose = lambda first_matrix, last_matrix: last_matrix @ np.append(first_matrix, [np.array([0, 0, 0, 1])], axis=0)
 K, M1, M2 = utils.utils.read_cameras()
@@ -32,32 +34,6 @@ def alt_compose(T_a_c, T_a_b):
     res[:, :-1] = R_c_b
     res[:, -1] = t_c_b
     return res
-
-
-def choose_key_frames_by_elapsed_time(frameIds, track_db):
-    """
-    choosing proper keyframes using time elapsed criterion
-    """
-    min_frameId, max_frameId = min(frameIds.keys()), max(frameIds.keys())
-    # key_frames = [n for n in range(min_frameId, 500 + 1,5)]
-    key_frames = [0]
-    n = 1
-    while n < len(list(frameIds.values())):
-        best_score = 0
-        best_candidate = n+1
-        cur_tracksIds = track_db.get_track_ids_for_frame(n)
-
-        for candidate in range(n + 3, n + 20):
-            candidate_tracksIds = track_db.get_track_ids_for_frame(candidate)
-
-            score1 = len(candidate_tracksIds)
-            score2 = sum([1 for tid in candidate_tracksIds if tid in cur_tracksIds])
-            if score1*score2 > best_score:
-                best_score = score1*score2
-                best_candidate = candidate
-        key_frames.append(best_candidate)
-        n = best_candidate
-    return key_frames
 
 
 def get_bundle_windows(key_frames):
@@ -480,9 +456,9 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
     :param track_db: The tracking data.
     :return: Results of bundle adjustment
     """
-    PATH_TO_SAVE_COMPARISON_TO_GT = "../plots/compare_to_ground_truth"
-    PATH_TO_SAVE_LOCALIZATION_ERROR = "../plots/localization_error"
-    PATH_TO_SAVE_2D_TRAJECTORY = "../plots/2d_view_of_the_entire_scene"
+    PATH_TO_SAVE_COMPARISON_TO_GT = "plots/compare_to_ground_truth"
+    PATH_TO_SAVE_LOCALIZATION_ERROR = "plots/localization_error"
+    PATH_TO_SAVE_2D_TRAJECTORY = "plots/2d_view_of_the_entire_scene"
 
     # Step 1: Initialize TrackDatabase and Select meaningful Keyframes
     if track_db is None:

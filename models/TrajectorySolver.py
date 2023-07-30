@@ -14,7 +14,7 @@ class TrajectorySolver:
     def __init__(self, track_db):
         self.__matcher = Matcher()
         self.deserialization_result = None
-        self.__track_db = track_db
+        self._track_db = track_db
         self._load_tracks_to_db()
         self.gt_trajectory = get_gt_trajectory()
         self.__predicted_trajectory = None
@@ -29,14 +29,14 @@ class TrajectorySolver:
         raise NotImplementedError("Subclasses should implement this!")
 
     def _load_tracks_to_db(self):
-        self.deserialization_result = self.__track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
+        self.deserialization_result = self._track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
 
         if self.deserialization_result == FAILURE:
-            _, self.__track_db = track_camera_for_many_images()
-            self.__track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+            _, self._track_db = track_camera_for_many_images()
+            self._track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
     def get_track_db(self):
-        return self.__track_db
+        return self._track_db
 
     def get_deserialization_result(self):
         return self.deserialization_result
@@ -52,13 +52,14 @@ class PNP(TrajectorySolver):
     def __init__(self,track_db, force_recompute=False):
         super().__init__(track_db)
         self.force_recompute = force_recompute
+        self._camera_positions = None
 
     def compare_trajectory_to_gt(self):
         pass
 
     def solve_trajectory(self):
         if self.force_recompute or super().get_deserialization_result() != SUCCESS:
-            camera_positions = track_camera_for_many_images()
+            self._camera_positions, super()._track_db = track_camera_for_many_images()
             gt_camera_positions = get_gt_trajectory()
             plot_trajectories(camera_positions, gt_camera_positions)
 

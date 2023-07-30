@@ -174,7 +174,7 @@ def create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks)
         factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, c0, point_symbol, GTSAM_K)
         factor_graph.add(factor)
 
-        # creating projection factor on c0
+        # creating projection factor on c1
         measured_point2 = gtsam.StereoPoint2(last_loc[0], last_loc[1], last_loc[2])
         stereomodel_noise = gtsam.noiseModel.Isotropic.Sigma(3, 0.1)
         factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, c1, point_symbol, GTSAM_K)
@@ -203,8 +203,8 @@ def solve_trivial_bundle(reference_kf, candidate_kf, matching_data):
 
 
 def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estimates, matcher,
-                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=5,
-                 req_inliers_ratio = 0.92, draw_supporting_matches_flag=False, points_to_stop_by=False,
+                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=30,
+                 req_inliers_ratio=0.92, draw_supporting_matches_flag=False, points_to_stop_by=False,
                  compare_to_gt=False, show_localization_error=False, show_uncertainty=False):
     graph_for_shortest_path, edge_to_covariance = \
         init_graph_for_shortest_path(pose_graph=pose_graph, key_frames=key_frames, cond_matrices=cond_matrices)
@@ -284,11 +284,11 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
             optimizer = gtsam.LevenbergMarquardtOptimizer(pose_graph, cur_pose_graph_estimates)
             cur_pose_graph_estimates = optimizer.optimize()
             should_optimize = False
-            if points_to_stop_by and (len(successful_lc) - prev_num_of_successful_lc) > 15:
+            if points_to_stop_by and (len(successful_lc) - prev_num_of_successful_lc) > 5:
                 marginals = gtsam.Marginals(pose_graph, cur_pose_graph_estimates)
                 plot.plot_trajectory(1, cur_pose_graph_estimates, marginals=marginals,
                                      title=f"optimized estimates trajectory with cov after: {len(successful_lc)} updates", scale=1,
-                                     save_file=f"../plots/optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}")
+                                     save_file=f"plots/optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}")
                 prev_num_of_successful_lc = len(successful_lc)
 
 
@@ -345,13 +345,13 @@ def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after):
     after_score = [np.abs(np.linalg.det(cov)) for cov in after]
     before_score = [np.abs(np.linalg.det(cov)) for cov in before]
 
-    plot_uncertainty_over_time(key_frames, after_score, "../plots/lc_uncertainty_after", "(after)")
-    plot_uncertainty_over_time(key_frames, before_score, "../plots/lc_uncertainty_before", "(before)")
+    plot_uncertainty_over_time(key_frames, after_score, "plots/lc_uncertainty_after", "(after)")
+    plot_uncertainty_over_time(key_frames, before_score, "plots/lc_uncertainty_before", "(before)")
 
 
 def plot_pg_locations_before_and_after_lc(pose_graph_after, values_after):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
-    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)[-1]
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     pose_graph, initial_estimates, landmarks = models.BundleAdjustment.create_pose_graph(bundle_results,
                                                                                          optimized_relative_keyframes_poses,
@@ -360,13 +360,13 @@ def plot_pg_locations_before_and_after_lc(pose_graph_after, values_after):
     trajectory_after = get_trajectory_from_graph(pose_graph_after, values_after)
     trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
     gt_trajectory = get_gt_trajectory()[key_frames]
-    plot_trajectories(trajectory_before, gt_trajectory, path="../plots/lc_vs_gt_before", suffix="before_lc")
-    plot_trajectories(trajectory_after, gt_trajectory, path="../plots/lc_vs_gt_after", suffix="after_lc")
+    plot_trajectories(trajectory_before, gt_trajectory, path="plots/lc_vs_gt_before", suffix="before_lc")
+    plot_trajectories(trajectory_after, gt_trajectory, path="plots/lc_vs_gt_after", suffix="after_lc")
 
 
 def plot_pg_locations_error_graph_before_and_after_lc(pose_graph_after, values_after):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
-    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)[-1]
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     pose_graph, initial_estimates, landmarks = models.BundleAdjustment.create_pose_graph(bundle_results,
                                                                                          optimized_relative_keyframes_poses,
