@@ -325,7 +325,7 @@ def plot_trajectory_with_loops(camera_positions, loop_closures, path="plots/"):
 
 def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
-    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)[-1]
+    cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
     key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
     pose_graph, initial_estimates, landmarks = models.BundleAdjustment.create_pose_graph(bundle_results,
                                                                                          optimized_relative_keyframes_poses,
