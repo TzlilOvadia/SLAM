@@ -12,12 +12,12 @@ from models.Constants import VERTICAL_REPRESENTATION
 from models.TrackDatabase import TrackDatabase
 # from plotters import draw_3d_points, plot_regions_around_matching_pixels
 
-MAC_OS_PATH = "../dataset/sequences/05/"
-WINDOWS_OS_PATH = "../dataset/sequences/05\\"
+MAC_OS_PATH = "VAN_ex/dataset/sequences/05/"
+WINDOWS_OS_PATH = "VAN_ex/dataset/sequences/05\\"
 SEP = "\\" if os.name == 'nt' else "/"
 DATA_PATH = WINDOWS_OS_PATH if os.name == 'nt' else MAC_OS_PATH
 
-WINDOWS_GT_PATH = "../dataset/poses/05.txt"
+WINDOWS_GT_PATH = "VAN_ex/dataset/poses/05.txt"
 
 
 def read_images(idx) -> (np.ndarray, np.ndarray):

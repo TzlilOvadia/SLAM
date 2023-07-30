@@ -41,5 +41,5 @@ OPTIMIZED_ESTIMATES_INDEX = 5
 MARGINALS_INDEX = 6
 MAHALANOBIS_THRESH = 350000
 
-PATH_TO_SAVE_TRACKER_FILE = "../../models/serialized_tracker"
-PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "../../models/bundle_adjustment_results"
+PATH_TO_SAVE_TRACKER_FILE = "models/serialized_tracker"
+PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "models/bundle_adjustment_results"
