@@ -125,12 +125,12 @@ class BundleAdjustment(TrajectorySolver):
 class LoopClosure(TrajectorySolver):
 
     def compare_trajectory_to_gt(self):
-        if compare_to_gt:
-            plot_pg_locations_before_and_after_lc(self.__cur_pose_graph_estimates)
-        if show_localization_error:
-            plot_pg_locations_error_graph_before_and_after_lc(self.__cur_pose_graph_estimates)
-        if show_uncertainty:
-            plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, cur_pose_graph_estimates)
+        # if compare_to_gt:
+        plot_pg_locations_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+        # if show_localization_error:
+        plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+        # if show_uncertainty:
+        plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, cur_pose_graph_estimates)
 
     def __init__(self,track_db):
         super().__init__(track_db)
@@ -157,7 +157,7 @@ class LoopClosure(TrajectorySolver):
                                                                      optimized_relative_keyframes_poses,
                                                                      optimized_global_keyframes_poses,
                                                                      cond_matrices)
-        kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
+        # kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
         cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
         self.__our_trajectory = optimized_global_keyframes_poses
         self.__pose_graph, self.__cur_pose_graph_estimates, self.__successful_lc = loop_closure(pose_graph, self.key_frames,
@@ -165,37 +165,12 @@ class LoopClosure(TrajectorySolver):
                                                                            mahalanobis_thresh=MAHALANOBIS_THRESH,
                                                                            pose_graph_initial_estimates=initial_estimates,
                                                                            draw_supporting_matches_flag=True,
-                                                                           points_to_stop_by=True,
-                                                                           compare_to_gt=True,
-                                                                           show_localization_error=True,
-                                                                           show_uncertainty=True)
-
-
-    def __extract_trajectory_elements(self):
-        optimized_relative_keyframes_poses = self.bundle_results[2]
-        optimized_global_keyframes_poses = self.bundle_results[1]
-        global_3d_points = []
-        for bundle_res in self.bundle_results[0]:
-            i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = bundle_res
-            estimated_camera_position = optimized_estimates.atPose3(
-                gtsam.symbol(CAMERA, bundle_window[1]))  # transforms from end of bundle to its beginning
-            optimized_relative_keyframes_poses.append(estimated_camera_position)
-            previous_global_pose = optimized_global_keyframes_poses[
-                -1]  # transforms from beginning of bundle to global world
-            current_global_pose = previous_global_pose * estimated_camera_position  # transforms from end of bundle to global world
-            bundle_3d_points = gtsam.utilities.extractPoint3(optimized_estimates)
-            for point in bundle_3d_points:
-                global_point = previous_global_pose.transformFrom(gtsam.Point3(point))
-                global_3d_points.append(global_point)
-            optimized_global_keyframes_poses.append(current_global_pose)
-        self.__global_3d_points_numpy = np.array(global_3d_points)
-        self.__global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_global_keyframes_poses])
+                                                                           points_to_stop_by=True
+                                                                           )
 
     def get_absolute_localization_error(self):
-
         try:
             plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
-
-        except Exception:
-            print("run solve_trajectory() first")
+        except :
+            print("running solve_trajectory() first")
 

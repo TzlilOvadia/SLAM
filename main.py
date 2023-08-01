@@ -21,6 +21,7 @@ if __name__ == "__main__":
     loop_closure_solver = LoopClosure(track_db)
     loop_closure_solver.solve_trajectory()
     loop_closure_cam_pos = loop_closure_solver.get_camera_positions()
+    loop_closure_solver.compare_trajectory_to_gt()
     exit(0)
 
     plot_multiple_trajectories(pnp_cam_pos, bundle_adjustment_cam_pos, loop_closure_cam_pos, get_gt_trajectory())
