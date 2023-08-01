@@ -303,7 +303,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
     return pose_graph, cur_pose_graph_estimates, successful_lc
 
 
-def get_trajectory_from_graph(graph, values):
+def get_trajectory_from_graph(values):
     all_poses = gtsam.utilities.extractPose3(values).reshape(-1, 4, 3).transpose(0, 2, 1)
     trajectory = all_poses[:, :, -1]
     return trajectory
@@ -357,8 +357,8 @@ def plot_pg_locations_before_and_after_lc(pose_graph_after, values_after):
                                                                                          optimized_relative_keyframes_poses,
                                                                                          optimized_global_keyframes_poses,
                                                                                          cond_matrices)
-    trajectory_after = get_trajectory_from_graph(pose_graph_after, values_after)
-    trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
+    trajectory_after = get_trajectory_from_graph(values_after)
+    trajectory_before = get_trajectory_from_graph(initial_estimates)
     gt_trajectory = get_gt_trajectory()[key_frames]
     plot_trajectories(trajectory_before, gt_trajectory, path="plots/lc_vs_gt_before", suffix="before_lc")
     plot_trajectories(trajectory_after, gt_trajectory, path="plots/lc_vs_gt_after", suffix="after_lc")
@@ -372,8 +372,8 @@ def plot_pg_locations_error_graph_before_and_after_lc(pose_graph_after, values_a
                                                                                          optimized_relative_keyframes_poses,
                                                                                          optimized_global_keyframes_poses,
                                                                                          cond_matrices)
-    trajectory_after = get_trajectory_from_graph(pose_graph_after, values_after)
-    trajectory_before = get_trajectory_from_graph(pose_graph, initial_estimates)
+    trajectory_after = get_trajectory_from_graph(values_after)
+    trajectory_before = get_trajectory_from_graph(initial_estimates)
     gt_trajectory = get_gt_trajectory()[key_frames]
 
     plot_localization_error_over_time(key_frames, trajectory_after, gt_trajectory, path=PATH_TO_SAVE_LOCALIZATION_ERROR_LOOP_CLOSURE_AFTER)
