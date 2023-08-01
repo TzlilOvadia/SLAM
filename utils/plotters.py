@@ -78,7 +78,6 @@ def plot_trajectories(camera_positions, gt_camera_positions, points_3d=None, pat
     plt.scatter(x=gt_camera_positions[:, 0], y=gt_camera_positions[:, 2], color='orange', label='ground truth trajectory', s=0.75)
     if points_3d is not None:
         plt.scatter(x=points_3d[:, 0], y=points_3d[:, 2], color='gray', label='landmarks', s=0.2)
-    #plt.scatter(x=gt_camera_positions[:10, 0], y=gt_camera_positions[:10, 2], color='orange', s=10)
     plt.xlabel("X")
     plt.ylabel("Z")
     plt.title("Our Trajectory Vs Ground Truth Trajectory "+suffix)

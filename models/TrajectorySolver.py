@@ -124,13 +124,6 @@ class BundleAdjustment(TrajectorySolver):
 
 class LoopClosure(TrajectorySolver):
 
-    def compare_trajectory_to_gt(self):
-        # if compare_to_gt:
-        plot_pg_locations_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
-        # if show_localization_error:
-        plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
-        # if show_uncertainty:
-        plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, cur_pose_graph_estimates)
 
     def __init__(self,track_db):
         super().__init__(track_db)
@@ -168,9 +161,11 @@ class LoopClosure(TrajectorySolver):
                                                                            points_to_stop_by=True
                                                                            )
 
-    def get_absolute_localization_error(self):
-        try:
-            plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
-        except :
-            print("running solve_trajectory() first")
+    def compare_trajectory_to_gt(self):
+        plot_pg_locations_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
 
+    def get_absolute_localization_error(self):
+        plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+
+    def show_uncertainty(self):
+        plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
