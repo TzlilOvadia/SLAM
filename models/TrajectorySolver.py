@@ -17,7 +17,7 @@ class TrajectorySolver:
         self._track_db = track_db
         self._load_tracks_to_db()
         self.gt_trajectory = get_gt_trajectory()
-        self.__predicted_trajectory = None
+        self._predicted_trajectory = None
 
     def solve_trajectory(self):
         raise NotImplementedError("Subclasses should implement this!")
@@ -28,11 +28,14 @@ class TrajectorySolver:
     def compare_trajectory_to_gt(self):
         raise NotImplementedError("Subclasses should implement this!")
 
+    def get_camera_positions(self):
+        return self._camera_positions
+
     def _load_tracks_to_db(self):
         self.deserialization_result = self._track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
 
         if self.deserialization_result == FAILURE:
-            _, self._track_db = track_camera_for_many_images()
+            self._camera_positions, self._track_db = track_camera_for_many_images()
             self._track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
     def get_track_db(self):
@@ -47,21 +50,17 @@ class TrajectorySolver:
 
 class PNP(TrajectorySolver):
 
-
-
     def __init__(self,track_db, force_recompute=False):
         super().__init__(track_db)
         self.force_recompute = force_recompute
-        self._camera_positions = None
 
     def compare_trajectory_to_gt(self):
-        pass
+        plot_trajectories(self._track_db.camera_positions, self.gt_trajectory)
 
     def solve_trajectory(self):
-        if self.force_recompute or super().get_deserialization_result() != SUCCESS:
-            self._camera_positions, super()._track_db = track_camera_for_many_images()
-            gt_camera_positions = get_gt_trajectory()
-            plot_trajectories(camera_positions, gt_camera_positions)
+        if self.force_recompute or self.get_deserialization_result() != SUCCESS:
+            _, self._track_db = track_camera_for_many_images()
+
 
     def get_absolute_localization_error(self):
         # Implement method to return PNP statistics here
@@ -69,6 +68,7 @@ class PNP(TrajectorySolver):
 
 
 class BundleAdjustment(TrajectorySolver):
+
 
     def __init__(self,track_db):
         super().__init__(track_db)
@@ -78,7 +78,6 @@ class BundleAdjustment(TrajectorySolver):
         self.optimized_relative_keyframes_poses = []
         self.global_3d_points = []
         self.key_frames = None
-
         self.__global_3d_points_numpy = None
         self.__global_Rt_poses_in_numpy = None
 
@@ -89,7 +88,7 @@ class BundleAdjustment(TrajectorySolver):
     def compare_trajectory_to_gt(self):
         gt_camera_positions = get_gt_trajectory()[np.array(self.key_frames)]
         plot_trajectories(camera_positions=self.__global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
-                          points_3d=self.__global_3d_points_numpy, path=PATH_TO_SAVE_COMPARISON_TO_GT_BUNDLE_ADJUSTMENT)
+                        path=PATH_TO_SAVE_COMPARISON_TO_GT_BUNDLE_ADJUSTMENT)
 
     def get_absolute_localization_error(self):
         try:
@@ -100,7 +99,6 @@ class BundleAdjustment(TrajectorySolver):
 
 
 class LoopClosure(TrajectorySolver):
-
 
     def __init__(self,track_db):
         super().__init__(track_db)
@@ -148,5 +146,3 @@ class LoopClosure(TrajectorySolver):
         except Exception:
             print("run solve_trajectory() first")
 
-    def compare_trajectory_to_gt(self):
-        pass
