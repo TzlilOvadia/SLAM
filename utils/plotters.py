@@ -101,7 +101,7 @@ def plot_multiple_trajectories(camera_positions_PNP,camera_positions_bundle_adju
 
     plt.xlabel("X")
     plt.ylabel("Z")
-    plt.title("Our Trajectory Vs Ground Truth Trajectory "+suffix)
+    plt.title("All of Our Trajectories Vs Ground Truth Trajectory "+suffix)
     plt.legend()
     if path:
         plt.savefig(path)
