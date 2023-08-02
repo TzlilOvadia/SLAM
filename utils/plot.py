@@ -377,6 +377,7 @@ def plot_trajectory(
         title: The title of the plot.
         axis_labels (iterable[string]): List of axis labels to set.
     """
+    plt.close(fignum)
     fig = plt.figure(fignum)
     # fig = plt.figure()
     axes = fig.add_subplot(projection='3d')

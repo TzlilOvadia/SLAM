@@ -91,11 +91,11 @@ def plot_multiple_trajectories(camera_positions_PNP,camera_positions_bundle_adju
                                gt_camera_positions, points_3d=None, path="", suffix=""):
 
     plt.figure()
-    plt.scatter(x=camera_positions_PNP[:, 0], y=camera_positions[:, 2], color='blue', label='PNP trajectory', s=0.75)
-    plt.scatter(x=camera_positions_bundle_adjustment[:, 0], y=camera_positions[:, 2], color='blue', label='Bundle adjustment trajectory', s=0.75)
-    plt.scatter(x=camera_positions_loop_closure[:, 0], y=camera_positions[:, 2], color='blue', label='Loop closure trajectory', s=0.75)
+    plt.scatter(x=camera_positions_PNP[:, 0], y=camera_positions_PNP[:, 2], color='red', label='PNP trajectory', s=0.5, alpha=.5)
+    plt.scatter(x=camera_positions_bundle_adjustment[:, 0], y=camera_positions_bundle_adjustment[:, 2], color='green', label='Bundle adjustment trajectory', s=0.5,alpha=.5)
+    plt.scatter(x=camera_positions_loop_closure[:, 0], y=camera_positions_loop_closure[:, 2], color='blue', label='Loop closure trajectory', s=0.5, alpha=.5)
 
-    plt.scatter(x=gt_camera_positions[:, 0], y=gt_camera_positions[:, 2], color='orange', label='Ground truth trajectory', s=0.75)
+    plt.scatter(x=gt_camera_positions[:, 0], y=gt_camera_positions[:, 2], color='orange', label='Ground truth trajectory', s=0.5,alpha=.5)
     if points_3d is not None:
         plt.scatter(x=points_3d[:, 0], y=points_3d[:, 2], color='gray', label='landmarks', s=0.2)
 

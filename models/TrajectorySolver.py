@@ -31,7 +31,7 @@ class TrajectorySolver:
         raise NotImplementedError("Subclasses should implement this!")
 
     def get_camera_positions(self):
-        return self._camera_positions
+        return self._track_db.camera_positions
 
     def _load_tracks_to_db(self):
         self.deserialization_result = self._track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
@@ -70,7 +70,6 @@ class PNP(TrajectorySolver):
 
 
 class BundleAdjustment(TrajectorySolver):
-
 
     def __init__(self,track_db):
         super().__init__(track_db)
@@ -111,7 +110,7 @@ class BundleAdjustment(TrajectorySolver):
     def compare_trajectory_to_gt(self):
         gt_camera_positions = get_gt_trajectory()
         plot_trajectories(camera_positions=self.__global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
-                          points_3d=global_3d_points_numpy, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+                          points_3d=None, path=PATH_TO_SAVE_COMPARISON_TO_GT)
 
 
     def get_absolute_localization_error(self):
@@ -121,6 +120,8 @@ class BundleAdjustment(TrajectorySolver):
         except Exception:
             print("run solve trajectory first")
 
+    def get_camera_positions(self):
+        return self.__global_Rt_poses_in_numpy
 
 class LoopClosure(TrajectorySolver):
 
@@ -161,6 +162,7 @@ class LoopClosure(TrajectorySolver):
                                                                            points_to_stop_by=True
                                                                            )
 
+
     def compare_trajectory_to_gt(self):
         plot_pg_locations_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
 
@@ -169,3 +171,6 @@ class LoopClosure(TrajectorySolver):
 
     def show_uncertainty(self):
         plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+
+    def get_camera_positions(self):
+        return get_trajectory_from_graph(self.__cur_pose_graph_estimates)
