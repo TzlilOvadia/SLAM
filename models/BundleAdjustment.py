@@ -503,7 +503,6 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
     _, bundle_window, _, _, _, optimized_estimates = bundle_results[0]
     estimated_camera_position = optimized_estimates.atPose3(gtsam.symbol(CAMERA, bundle_window[0]))
     optimized_global_keyframes_poses.append(estimated_camera_position)
-    #optimized_global_keyframes_poses.append(gtsam.Pose3())  # Initialize with first camera pose
     global_3d_points = []
     for bundle_res in bundle_results:
         i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = bundle_res

@@ -14,11 +14,11 @@ class TrajectorySolver:
 
     def __init__(self, track_db):
         self.__matcher = Matcher()
-        self._camera_positions = None
+        self._final_estimated_trajectory = None
         self.deserialization_result = None
         self._track_db = track_db
         self._load_tracks_to_db()
-        self.gt_trajectory = get_gt_trajectory()
+        self._gt_trajectory = get_gt_trajectory()
         self._predicted_trajectory = None
 
     def solve_trajectory(self):
@@ -30,7 +30,7 @@ class TrajectorySolver:
     def compare_trajectory_to_gt(self):
         raise NotImplementedError("Subclasses should implement this!")
 
-    def get_camera_positions(self):
+    def get_final_estimated_trajectory(self):
         """
         Getter method for camera positions.
 
@@ -46,7 +46,7 @@ class TrajectorySolver:
         self.deserialization_result = self._track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
 
         if self.deserialization_result == FAILURE:
-            self._camera_positions, self._track_db = track_camera_for_many_images()
+            self._final_estimated_trajectory, self._track_db = track_camera_for_many_images()
             self._track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
     def get_track_db(self):
@@ -84,7 +84,7 @@ class PNP(TrajectorySolver):
         self.force_recompute = force_recompute
 
     def compare_trajectory_to_gt(self):
-        plot_trajectories(self._track_db.camera_positions, self.gt_trajectory)
+        plot_trajectories(self._track_db.camera_positions, self._gt_trajectory)
 
     def solve_trajectory(self):
         if self.force_recompute or self.get_deserialization_result() != SUCCESS:
@@ -93,7 +93,7 @@ class PNP(TrajectorySolver):
 
     def get_absolute_localization_error(self):
         try:
-            plot_localization_error_over_time(np.arange(len(list(self._track_db.get_frameIds()))), self._track_db.camera_positions, self.gt_trajectory,
+            plot_localization_error_over_time(np.arange(len(list(self._track_db.get_frameIds()))), self._track_db.camera_positions, self._gt_trajectory,
                                               path="plots/pnp_localization_error_vs_key_frames", mode="PNP")
 
         except AttributeError as e:
@@ -108,29 +108,42 @@ class BundleAdjustment(TrajectorySolver):
     def __init__(self,track_db):
         super().__init__(track_db)
         self.bundle_results = None
-        self.optimized_global_keyframes_poses = []
+        self.optimized_relative_keyframes_poses = None
+        self.optimized_global_keyframes_poses = None
         self.bundle_3d_points = None
-        self.optimized_relative_keyframes_poses = []
         self.global_3d_points = []
         self.key_frames = None
         self.__global_3d_points_numpy = None
         self.__global_Rt_poses_in_numpy = None
-        self._camera_positions = None
+        self._final_estimated_trajectory = None
 
     def solve_trajectory(self):
         self.bundle_results = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+        bundle_windows = self.bundle_results[-2]
+        self.key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
         self.__extract_trajectory_elements()
+        bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
+        cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+        key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
+        _, initial_estimates, _ = create_pose_graph(bundle_results,
+                                                                    optimized_relative_keyframes_poses,
+                                                                    optimized_global_keyframes_poses,
+                                                                    cond_matrices)
+        self._final_estimated_trajectory = get_trajectory_from_graph(initial_estimates)
+        self._gt_trajectory = get_gt_trajectory()[key_frames]
 
     def __extract_trajectory_elements(self):
-        optimized_relative_keyframes_poses = self.bundle_results[2]
-        optimized_global_keyframes_poses = self.bundle_results[1]
+        self.optimized_relative_keyframes_poses = self.bundle_results[2]
+        self.optimized_global_keyframes_poses = self.bundle_results[1]
+        optimized_relative_keyframes_poses = []
+        optimized_global_keyframes_poses = []
         global_3d_points = []
         for bundle_res in self.bundle_results[0]:
             i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = bundle_res
             estimated_camera_position = optimized_estimates.atPose3(
                 gtsam.symbol(CAMERA, bundle_window[1]))  # transforms from end of bundle to its beginning
             optimized_relative_keyframes_poses.append(estimated_camera_position)
-            previous_global_pose = optimized_global_keyframes_poses[
+            previous_global_pose = self.optimized_global_keyframes_poses[
                 -1]  # transforms from beginning of bundle to global world
             current_global_pose = previous_global_pose * estimated_camera_position  # transforms from end of bundle to global world
             bundle_3d_points = gtsam.utilities.extractPoint3(optimized_estimates)
@@ -138,8 +151,9 @@ class BundleAdjustment(TrajectorySolver):
                 global_point = previous_global_pose.transformFrom(gtsam.Point3(point))
                 global_3d_points.append(global_point)
             optimized_global_keyframes_poses.append(current_global_pose)
+
         self.__global_3d_points_numpy = np.array(global_3d_points)
-        self.__global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_global_keyframes_poses])
+        self.__global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_relative_keyframes_poses])
 
     def compare_trajectory_to_gt(self):
         gt_camera_positions = get_gt_trajectory()
@@ -154,19 +168,23 @@ class BundleAdjustment(TrajectorySolver):
 
 
     def get_absolute_localization_error(self):
+
         try:
-            plot_localization_error_over_time(self.key_frames, camera_positions=self.__global_Rt_poses_in_numpy,
-                                          gt_camera_positions=get_gt_trajectory(), path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT)
+            plot_localization_error_over_time(self.key_frames, camera_positions=self._final_estimated_trajectory,
+                                          gt_camera_positions=self._gt_trajectory,
+                                              path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT,
+                                              mode="Bundle Adjustment")
         except AttributeError as e:
             print(f"{e}.\nRunning solve_trajectory...")
             self.solve_trajectory()
             plot_localization_error_over_time(self.key_frames, camera_positions=self.__global_Rt_poses_in_numpy,
-                                              gt_camera_positions=get_gt_trajectory(),
-                                              path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT)
+                                              gt_camera_positions=self._gt_trajectory,
+                                              path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT,
+                                              mode="Bundle Adjustment")
 
 
-    def get_camera_positions(self):
-        return self.__global_Rt_poses_in_numpy
+    def get_final_estimated_trajectory(self):
+        return self._final_estimated_trajectory
 
 class LoopClosure(TrajectorySolver):
 
@@ -230,5 +248,5 @@ class LoopClosure(TrajectorySolver):
             self.solve_trajectory()
             plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
 
-    def get_camera_positions(self):
+    def get_final_estimated_trajectory(self):
         return get_trajectory_from_graph(self.__cur_pose_graph_estimates)

@@ -57,6 +57,25 @@ def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_pos
     else:
         plt.show()
 
+
+def plot_multiple_localization_error_over_time(keyframes, camera_positions_pnp, camera_positions_ba, gt_camera_positions, path="", mode=""):
+    plt.figure()
+    localization_error_pnp = np.linalg.norm(np.abs(camera_positions_pnp[keyframes] - gt_camera_positions[keyframes]), axis=1)
+    localization_error_ba = np.linalg.norm(np.abs(camera_positions_ba - gt_camera_positions[keyframes]), axis=1)
+    localization_error_lc = np.linalg.norm(np.abs(camera_positions_lc - gt_camera_positions[keyframes]), axis=1)
+    plt.plot(keyframes, localization_error_pnp, label="PNP")
+    plt.plot(keyframes, localization_error_ba, label="Bundle Adjustment")
+    plt.plot(keyframes, localization_error_lc, label="Loop Closure")
+    plt.xlabel("KeyFrame Index")
+    plt.ylabel("Localization error (meters)")
+    plt.title(f"{mode} KeyFrame Localization Error Over Time")
+    plt.legend()
+    if path:
+        plt.savefig(path)
+    else:
+        plt.show()
+
+
 def plot_trajectory_and_points(camera_positions, points_locations):
     plt.figure()
     plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='camera locations', s=0.75)
