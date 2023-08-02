@@ -21,6 +21,7 @@ if __name__ == "__main__":
     bundle_adjustment_cam_pos = bundle_adjustment_solver.get_final_estimated_trajectory()
     bundle_adjustment_solver.get_absolute_localization_error()
     bundle_adjustment_solver.compare_trajectory_to_gt()
+    bundle_adjustment_solver.get_rotation_error()
     print("#################### Starting Loop Closure segment ####################")
     loop_closure_solver = LoopClosure(track_db)
     loop_closure_solver.solve_trajectory()

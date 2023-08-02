@@ -3,7 +3,7 @@ import numpy as np
 from models.Constants import *
 from models.Matcher import Matcher
 from models.TrackDatabase import TrackDatabase
-from models.BundleAdjustment import bundle_adjustment, create_pose_graph, load_bundle_results
+from models.BundleAdjustment import bundle_adjustment, create_pose_graph, load_bundle_results, get_translation_rotation_diff
 from utils.utils import track_camera_for_many_images, get_gt_trajectory
 from utils.plotters import plot_trajectories, plot_localization_error_over_time
 from models.LoopClosure import loop_closure, plot_pg_locations_before_and_after_lc,\
@@ -25,6 +25,9 @@ class TrajectorySolver:
         raise NotImplementedError("Subclasses should implement this!")
 
     def get_absolute_localization_error(self):
+        raise NotImplementedError("Subclasses should implement this!")
+
+    def get_absolute_estimation_error(self):
         raise NotImplementedError("Subclasses should implement this!")
 
     def compare_trajectory_to_gt(self):
@@ -79,6 +82,9 @@ class TrajectorySolver:
 
 class PNP(TrajectorySolver):
 
+    def get_absolute_estimation_error(self):
+        pass
+
     def __init__(self,track_db, force_recompute=False):
         super().__init__(track_db)
         self.force_recompute = force_recompute
@@ -123,7 +129,7 @@ class BundleAdjustment(TrajectorySolver):
         self.key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
         self.__extract_trajectory_elements()
         bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
-        cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+        cond_matrices = self.bundle_results
         key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
         _, initial_estimates, _ = create_pose_graph(bundle_results,
                                                                     optimized_relative_keyframes_poses,
@@ -153,7 +159,7 @@ class BundleAdjustment(TrajectorySolver):
             optimized_global_keyframes_poses.append(current_global_pose)
 
         self.__global_3d_points_numpy = np.array(global_3d_points)
-        self.__global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_relative_keyframes_poses])
+        self.__global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_global_keyframes_poses])
 
     def compare_trajectory_to_gt(self):
         gt_camera_positions = get_gt_trajectory()
@@ -166,6 +172,16 @@ class BundleAdjustment(TrajectorySolver):
             plot_trajectories(camera_positions=self.__global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
                               points_3d=None, path=PATH_TO_SAVE_COMPARISON_TO_GT)
 
+    def get_rotation_error(self):
+
+        pass
+        # pred_trajectory = self.__global_Rt_poses_in_numpy
+        # gt_trajectory = get_gt_trajectory()[self.key_frames]
+        # for kf in self.key_frames:
+        #     pred_pose = pred_trajectory[kf]
+        #     gt_pose = gt_trajectory[kf]
+        #     translation, rotation = get_translation_rotation_diff(pred_pose, gt_pose)
+        #     print(translation)
 
     def get_absolute_localization_error(self):
 
@@ -190,6 +206,8 @@ class LoopClosure(TrajectorySolver):
 
     def __init__(self,track_db):
         super().__init__(track_db)
+        self.__global_3d_points_numpy = None
+        self.__global_Rt_poses_in_numpy = None
         self.__pose_graph = None
         self.__our_trajectory = None
         self.__cur_pose_graph_estimates = None
@@ -201,8 +219,6 @@ class LoopClosure(TrajectorySolver):
         self.global_3d_points = []
         self.key_frames = None
 
-        self.__global_3d_points_numpy = None
-        self.__global_Rt_poses_in_numpy = None
 
     def solve_trajectory(self):
         # Implement Loop Closure algorithm here
@@ -239,6 +255,16 @@ class LoopClosure(TrajectorySolver):
             print(f"{e}.\nRunning solve_trajectory...")
             self.solve_trajectory()
             plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+
+    def get_rotation_error(self):
+        pass
+        # pred_trajectory = self.get_final_estimated_trajectory()
+        # gt_trajectory = get_gt_trajectory()[self.key_frames]
+        # for kf in self.key_frames:
+        #     pred_pose = pred_trajectory[kf]
+        #     gt_pose = gt_trajectory[kf]
+        #     translation, rotation = get_translation_rotation_diff(pred_pose, gt_pose)
+        #     print(translation)
 
     def show_uncertainty(self):
         try:

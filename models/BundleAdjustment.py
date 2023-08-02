@@ -40,7 +40,7 @@ def get_bundle_windows(key_frames):
     return [(key_frames[i - 1], key_frames[i]) for i in range(1, len(key_frames))]
 
 
-def _compute_distance(pose_i, pose_j):
+def get_translation_rotation_diff(pose_i, pose_j):
     translation_i = pose_i[:3, 3]  # Extract translation vector from pose_i
     translation_j = pose_j[:3, 3]  # Extract translation vector from pose_j
 
@@ -50,8 +50,8 @@ def _compute_distance(pose_i, pose_j):
 
     rotation_diff = rotation_i.inv() * rotation_j  # Compute the relative rotation difference between pose_i and pose_j
     axis_angle = rotation_diff.as_rotvec()
-    sign = 1 if np.sum(np.sign(axis_angle)) == (3 or -3) else -1 # Sign of the angle
-    return distance, rotation_diff.magnitude() * sign
+    # sign = 1 if np.sum(np.sign(axis_angle)) == (3 or -3) else -1 # Sign of the angle
+    return distance, rotation_diff.magnitude()
 
 
 def select_keyframes_by_track_max_distance(frames, track_db):
@@ -61,7 +61,7 @@ def select_keyframes_by_track_max_distance(frames, track_db):
     while frameId < len(frames):
         cur_pose = track_db.get_extrinsic_matrix_by_frameId(frameId)
         prev_pose = track_db.get_extrinsic_matrix_by_frameId(frameIds[-1])
-        distance, angle = _compute_distance(prev_pose, cur_pose)
+        distance, angle = get_translation_rotation_diff(prev_pose, cur_pose)
         window_size = frameId-frameIds[-1]
         rotation_accumulator += angle
 
@@ -177,7 +177,7 @@ def key_frames_by_percentile(frames, percentage, track_db):
         for fid in range(frame, new_key_frame):
             cur_pose = track_db.get_extrinsic_matrix_by_frameId(frame)
             prev_pose = track_db.get_extrinsic_matrix_by_frameId(frame - 1)
-            cur_step, angle = _compute_distance(prev_pose, cur_pose)
+            cur_step, angle = get_translation_rotation_diff(prev_pose, cur_pose)
             distance += cur_step
             rotation += angle
             if (abs(rotation) > 0.5 or abs(distance) > 100) and 4 < (fid - frame) < 20:
