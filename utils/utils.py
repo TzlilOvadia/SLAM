@@ -8,8 +8,9 @@ import tqdm
 import gtsam
 from tqdm import tqdm
 
-from models.Constants import VERTICAL_REPRESENTATION
+from models.Constants import VERTICAL_REPRESENTATION, SEED
 from models.TrackDatabase import TrackDatabase
+random.seed(SEED)
 # from plotters import draw_3d_points, plot_regions_around_matching_pixels
 
 MAC_OS_PATH = "VAN_ex/dataset/sequences/05/"

@@ -31,9 +31,18 @@ class TrajectorySolver:
         raise NotImplementedError("Subclasses should implement this!")
 
     def get_camera_positions(self):
+        """
+        Getter method for camera positions.
+
+        Returns:
+            list: List of camera positions.
+        """
         return self._track_db.camera_positions
 
     def _load_tracks_to_db(self):
+        """
+        Method to load the tracks to the database.
+        """
         self.deserialization_result = self._track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
 
         if self.deserialization_result == FAILURE:
@@ -41,12 +50,30 @@ class TrajectorySolver:
             self._track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
 
     def get_track_db(self):
+        """
+        Getter method for the track database.
+
+        Returns:
+            TrackDatabase: The track database object.
+        """
         return self._track_db
 
     def get_deserialization_result(self):
+        """
+        Getter method for the deserialization result.
+
+        Returns:
+            str: The result of the deserialization ('SUCCESS' or 'FAILURE').
+        """
         return self.deserialization_result
 
     def get_matcher(self):
+        """
+        Getter method for the Matcher object.
+
+        Returns:
+            Matcher: The Matcher object.
+        """
         return self.__matcher
 
 
@@ -65,8 +92,15 @@ class PNP(TrajectorySolver):
 
 
     def get_absolute_localization_error(self):
-        # Implement method to return PNP statistics here
-        pass
+        try:
+            plot_localization_error_over_time(np.arange(len(list(self._track_db.get_frameIds()))), self._track_db.camera_positions, self.gt_trajectory,
+                                              path="plots/pnp_localization_error_vs_key_frames", mode="PNP")
+
+        except AttributeError as e:
+            print(f"{e}.\nRunning solve_trajectory...")
+            self.solve_trajectory()
+
+
 
 
 class BundleAdjustment(TrajectorySolver):
@@ -109,22 +143,32 @@ class BundleAdjustment(TrajectorySolver):
 
     def compare_trajectory_to_gt(self):
         gt_camera_positions = get_gt_trajectory()
-        plot_trajectories(camera_positions=self.__global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
-                          points_3d=None, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+        try:
+            plot_trajectories(camera_positions=self.__global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
+                              points_3d=None, path=PATH_TO_SAVE_COMPARISON_TO_GT)
+        except AttributeError as e:
+            print(f"{e}.\nRunning solve_trajectory...")
+            self.solve_trajectory()
+            plot_trajectories(camera_positions=self.__global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
+                              points_3d=None, path=PATH_TO_SAVE_COMPARISON_TO_GT)
 
 
     def get_absolute_localization_error(self):
         try:
             plot_localization_error_over_time(self.key_frames, camera_positions=self.__global_Rt_poses_in_numpy,
                                           gt_camera_positions=get_gt_trajectory(), path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT)
-        except Exception:
-            print("run solve trajectory first")
+        except AttributeError as e:
+            print(f"{e}.\nRunning solve_trajectory...")
+            self.solve_trajectory()
+            plot_localization_error_over_time(self.key_frames, camera_positions=self.__global_Rt_poses_in_numpy,
+                                              gt_camera_positions=get_gt_trajectory(),
+                                              path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT)
+
 
     def get_camera_positions(self):
         return self.__global_Rt_poses_in_numpy
 
 class LoopClosure(TrajectorySolver):
-
 
     def __init__(self,track_db):
         super().__init__(track_db)
@@ -151,7 +195,7 @@ class LoopClosure(TrajectorySolver):
                                                                      optimized_relative_keyframes_poses,
                                                                      optimized_global_keyframes_poses,
                                                                      cond_matrices)
-        # kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
+        kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
         cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
         self.__our_trajectory = optimized_global_keyframes_poses
         self.__pose_graph, self.__cur_pose_graph_estimates, self.__successful_lc = loop_closure(pose_graph, self.key_frames,
@@ -162,15 +206,29 @@ class LoopClosure(TrajectorySolver):
                                                                            points_to_stop_by=True
                                                                            )
 
-
     def compare_trajectory_to_gt(self):
-        plot_pg_locations_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+        try:
+            plot_pg_locations_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+        except AttributeError as e:
+            print(f"{e}.\nRunning solve_trajectory...")
+            self.solve_trajectory()
+            plot_pg_locations_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
 
     def get_absolute_localization_error(self):
-        plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+        try:
+            plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+        except AttributeError as e:
+            print(f"{e}.\nRunning solve_trajectory...")
+            self.solve_trajectory()
+            plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
 
     def show_uncertainty(self):
-        plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+        try:
+            plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
+        except AttributeError as e:
+            print(f"{e}.\nRunning solve_trajectory...")
+            self.solve_trajectory()
+            plot_pg_uncertainty_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
 
     def get_camera_positions(self):
         return get_trajectory_from_graph(self.__cur_pose_graph_estimates)

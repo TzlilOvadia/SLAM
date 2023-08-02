@@ -45,13 +45,13 @@ def plot_uncertainty_over_time(keyframes, uncertainty_score, path="", suffix="")
         plt.show()
 
 
-def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_positions, path=""):
+def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_positions, path="", mode=""):
     plt.figure()
     localization_error = np.linalg.norm(np.abs(camera_positions - gt_camera_positions), axis=1)
     plt.plot(keyframes, localization_error)
     plt.xlabel("KeyFrame Index")
     plt.ylabel("Localization error (meters)")
-    plt.title("KeyFrame Localization Error Over Time")
+    plt.title(f"{mode} KeyFrame Localization Error Over Time")
     if path:
         plt.savefig(path)
     else:
