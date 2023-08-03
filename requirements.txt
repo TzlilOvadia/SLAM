@@ -1,0 +1,7 @@
+matplotlib~=3.7.1
+numpy~=1.24.3
+gtsam~=4.2a9
+opencv-python~=4.7.0.72
+tqdm~=4.65.0
+Dijkstar~=2.6.0
+scipy~=1.10.1
