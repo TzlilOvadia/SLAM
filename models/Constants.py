@@ -42,7 +42,7 @@ MARGINALS_INDEX = 6
 MAHALANOBIS_THRESH = 400000
 
 PATH_TO_SAVE_TRACKER_FILE = "models/serialized_tracker"
-PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "models/bundle_adjustment_results"
+PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "models/bundle_adjustment_results_2"
 
 PATH_TO_SAVE_COMPARISON_TO_GT_PNP = "plots/compare_PNP_to_ground_truth"
 PATH_TO_SAVE_COMPARISON_TO_GT_BUNDLE_ADJUSTMENT = "plots/compare_BUNDLE_ADJUSTMENT_to_ground_truth"
