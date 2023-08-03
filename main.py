@@ -8,7 +8,9 @@ from utils.utils import get_gt_trajectory
 if __name__ == "__main__":
     random.seed(SEED)
     track_db = TrackDatabase()
+    import sys
 
+    print("Python version:", sys.version)
     # print("#################### Starting PNP segment ####################")
     # pnp_solver = PNP(track_db)
     # pnp_solver.solve_trajectory()

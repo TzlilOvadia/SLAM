@@ -1,4 +1,3 @@
-from numpy import pi
 #############################################
 ################# Constants #################
 #############################################
@@ -24,8 +23,6 @@ DISTANCE_TOLERANCE = 60
 MIN_WINDOW_SIZE = 5
 MAX_DISTANCE_TOLERANCE = 150
 PERCENTILE = .97
-LARGE_ROTATION_VAR = (30 * pi / 180) ** 2
-SMALL_ROTATION_VAR = (5 * pi / 180) ** 2
 HORIZONTAL_SHIFT_TOLERANCE = 50
 VERTICAL_SHIFT_TOLERANCE = 15
 CAMERA = "c"
@@ -42,7 +39,7 @@ MARGINALS_INDEX = 6
 MAHALANOBIS_THRESH = 400000
 
 PATH_TO_SAVE_TRACKER_FILE = "models/serialized_tracker"
-PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "models/bundle_adjustment_results_2"
+PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "models/bundle_adjustment_results"
 
 PATH_TO_SAVE_COMPARISON_TO_GT_PNP = "plots/compare_PNP_to_ground_truth"
 PATH_TO_SAVE_COMPARISON_TO_GT_BUNDLE_ADJUSTMENT = "plots/compare_BUNDLE_ADJUSTMENT_to_ground_truth"
