@@ -119,15 +119,12 @@ class BundleAdjustment(TrajectorySolver):
         self.bundle_3d_points = None
         self.global_3d_points = []
         self.key_frames = None
-        self.__global_3d_points_numpy = None
-        self.__global_Rt_poses_in_numpy = None
         self._final_estimated_trajectory = None
 
     def solve_trajectory(self):
         self.bundle_results = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
         bundle_windows = self.bundle_results[-2]
         self.key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
-        self.__extract_trajectory_elements()
         bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
         cond_matrices = self.bundle_results
         key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
@@ -138,38 +135,15 @@ class BundleAdjustment(TrajectorySolver):
         self._final_estimated_trajectory = get_trajectory_from_graph(initial_estimates)
         self._gt_trajectory = get_gt_trajectory()[key_frames]
 
-    def __extract_trajectory_elements(self):
-        self.optimized_relative_keyframes_poses = self.bundle_results[2]
-        self.optimized_global_keyframes_poses = self.bundle_results[1]
-        optimized_relative_keyframes_poses = []
-        optimized_global_keyframes_poses = []
-        global_3d_points = []
-        for bundle_res in self.bundle_results[0]:
-            i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = bundle_res
-            estimated_camera_position = optimized_estimates.atPose3(
-                gtsam.symbol(CAMERA, bundle_window[1]))  # transforms from end of bundle to its beginning
-            optimized_relative_keyframes_poses.append(estimated_camera_position)
-            previous_global_pose = self.optimized_global_keyframes_poses[
-                -1]  # transforms from beginning of bundle to global world
-            current_global_pose = previous_global_pose * estimated_camera_position  # transforms from end of bundle to global world
-            bundle_3d_points = gtsam.utilities.extractPoint3(optimized_estimates)
-            for point in bundle_3d_points:
-                global_point = previous_global_pose.transformFrom(gtsam.Point3(point))
-                global_3d_points.append(global_point)
-            optimized_global_keyframes_poses.append(current_global_pose)
-
-        self.__global_3d_points_numpy = np.array(global_3d_points)
-        self.__global_Rt_poses_in_numpy = np.array([pose.translation() for pose in optimized_global_keyframes_poses])
-
     def compare_trajectory_to_gt(self):
         gt_camera_positions = get_gt_trajectory()
         try:
-            plot_trajectories(camera_positions=self.__global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
+            plot_trajectories(camera_positions=self._final_estimated_trajectory, gt_camera_positions=gt_camera_positions,
                               points_3d=None, path=PATH_TO_SAVE_COMPARISON_TO_GT)
         except AttributeError as e:
             print(f"{e}.\nRunning solve_trajectory...")
             self.solve_trajectory()
-            plot_trajectories(camera_positions=self.__global_Rt_poses_in_numpy, gt_camera_positions=gt_camera_positions,
+            plot_trajectories(camera_positions=self._final_estimated_trajectory, gt_camera_positions=gt_camera_positions,
                               points_3d=None, path=PATH_TO_SAVE_COMPARISON_TO_GT)
 
     def get_rotation_error(self):
@@ -193,7 +167,7 @@ class BundleAdjustment(TrajectorySolver):
         except AttributeError as e:
             print(f"{e}.\nRunning solve_trajectory...")
             self.solve_trajectory()
-            plot_localization_error_over_time(self.key_frames, camera_positions=self.__global_Rt_poses_in_numpy,
+            plot_localization_error_over_time(self.key_frames, camera_positions=self._final_estimated_trajectory,
                                               gt_camera_positions=self._gt_trajectory,
                                               path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT,
                                               mode="Bundle Adjustment")
