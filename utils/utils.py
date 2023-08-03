@@ -232,7 +232,7 @@ def find_all_minima(points_array: list):
             minimas[1:-1] < minimas[2:]))[0]
 
 
-def track_camera_for_many_images(thresh=0.6):
+def track_camera_for_many_images(thresh=1):
     from models.Matcher import Matcher
 
     k, m1, m2 = read_cameras()

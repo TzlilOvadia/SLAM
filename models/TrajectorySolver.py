@@ -21,6 +21,10 @@ class TrajectorySolver:
         self._gt_trajectory = get_gt_trajectory()
         self._predicted_trajectory = None
 
+
+    def get_rotation_error(self):
+        raise NotImplementedError("Subclasses should implement this!")
+
     def solve_trajectory(self):
         raise NotImplementedError("Subclasses should implement this!")
 
@@ -182,7 +186,7 @@ class LoopClosure(TrajectorySolver):
         self.__global_3d_points_numpy = None
         self.__global_Rt_poses_in_numpy = None
         self.__pose_graph = None
-        self.__initial_trajectory = None
+        self.__our_trajectory = None
         self.__cur_pose_graph_estimates = None
         self.__successful_lc = None
         self.bundle_results = None
@@ -205,7 +209,7 @@ class LoopClosure(TrajectorySolver):
                                                                      cond_matrices)
         kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
         cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
-        self.__initial_trajectory = get_trajectory_from_graph(optimized_global_keyframes_poses)
+        self.__initial_trajectory = optimized_global_keyframes_poses
         self.__pose_graph, self.__cur_pose_graph_estimates, self.__successful_lc = loop_closure(pose_graph, self.key_frames,
                                                                            matcher=super().get_matcher(), cond_matrices=cond_matrices,
                                                                            mahalanobis_thresh=MAHALANOBIS_THRESH,
@@ -213,7 +217,8 @@ class LoopClosure(TrajectorySolver):
                                                                            draw_supporting_matches_flag=True,
                                                                            points_to_stop_by=True
                                                                            )
-        self._final_estimated_trajectory = get_trajectory_from_graph(self.__pose_graph)
+        self.show_all_loops_on_trajectory()
+        # self._final_estimated_trajectory = __cur_pose_graph_estimates
 
     def compare_trajectory_to_gt(self):
         try:
@@ -230,16 +235,6 @@ class LoopClosure(TrajectorySolver):
             print(f"{e}.\nRunning solve_trajectory...")
             self.solve_trajectory()
             plot_pg_locations_error_graph_before_and_after_lc(self.__pose_graph, self.__cur_pose_graph_estimates)
-
-    def get_rotation_error(self):
-        pass
-        # pred_trajectory = self.get_final_estimated_trajectory()
-        # gt_trajectory = get_gt_trajectory()[self.key_frames]
-        # for kf in self.key_frames:
-        #     pred_pose = pred_trajectory[kf]
-        #     gt_pose = gt_trajectory[kf]
-        #     translation, rotation = get_translation_rotation_diff(pred_pose, gt_pose)
-        #     print(translation)
 
     def show_uncertainty(self):
         try:
@@ -262,4 +257,4 @@ class LoopClosure(TrajectorySolver):
 
     def show_all_loops_on_trajectory(self, suffix=""):
         from utils.plotters import plot_trajectory_with_loops
-        plot_trajectory_with_loops(self._final_estimated_trajectory, self.__successful_lc, path=f"plots/lc_{suffix}_")
+        plot_trajectory_with_loops(self.get_final_estimated_trajectory(), self.__successful_lc, path=f"plots/lc_{suffix}_")

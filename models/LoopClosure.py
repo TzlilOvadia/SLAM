@@ -203,8 +203,8 @@ def solve_trivial_bundle(reference_kf, candidate_kf, matching_data):
 
 
 def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estimates, matcher,
-                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=30,
-                 req_inliers_ratio=0.92, draw_supporting_matches_flag=False, points_to_stop_by=False,
+                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=20,
+                 req_inliers_ratio=0.85, draw_supporting_matches_flag=False, points_to_stop_by=False,
                  compare_to_gt=False, show_localization_error=False, show_uncertainty=False):
     graph_for_shortest_path, edge_to_covariance = \
         init_graph_for_shortest_path(pose_graph=pose_graph, key_frames=key_frames, cond_matrices=cond_matrices)

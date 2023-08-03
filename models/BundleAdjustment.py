@@ -95,8 +95,8 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
         track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
         track_starts_in_frame_id = track_data[0][FRAME_ID]
         # if track_ends_in_frame_id < bundle_ends_in_frame_id or bundle_starts_in_frame_id < track_starts_in_frame_id:
-        if track_ends_in_frame_id < bundle_ends_in_frame_id:
-            continue
+        # if track_ends_in_frame_id < bundle_ends_in_frame_id:
+        #     continue
 
         # TODO original code uses a 2d point coordinates from last frame of track, but uses the cam_pose of the last frame in the bundle... wrong
         # Create measurement factor for this track point
@@ -112,7 +112,7 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
 
         last_point3 = last_frame_pose.backproject(last_point2)
 
-        if last_point3[2] <= 0 or last_point3[2] >= 200:
+        if last_point3[2] <= 0 or last_point3[2] >= 150:
             continue
 
         point_symbol = gtsam.symbol(POINT, trackId)
@@ -471,9 +471,12 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
         print("serialization is done!")
 
     frameIds = track_db.get_frameIds()
-    key_frames = key_frames_by_percentile(list(frameIds.keys()), .87, track_db)
+    key_frames = key_frames_by_percentile(list(frameIds.keys()), .89, track_db)
     bundle_windows = get_bundle_windows(key_frames)
-
+    prev = key_frames[0]
+    for frame_id in key_frames[1:]:
+        if frame_id - prev < 5:
+            print(frame_id - prev)
     # Step 2: Solve Every Bundle Window
     num_factor_in_bundles = []
     bundle_results = []
