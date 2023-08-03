@@ -196,6 +196,7 @@ class LoopClosure(TrajectorySolver):
         self.global_3d_points = []
         self.key_frames = None
         self._final_estimated_trajectory = None
+        self._good_mahalanobis_candidates = None
 
 
     def solve_trajectory(self):
@@ -210,15 +211,16 @@ class LoopClosure(TrajectorySolver):
         kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
         cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
         self.__initial_trajectory = optimized_global_keyframes_poses
-        self.__pose_graph, self.__cur_pose_graph_estimates, self.__successful_lc = loop_closure(pose_graph, self.key_frames,
+        self.__pose_graph, self.__cur_pose_graph_estimates, self.__successful_lc, good_ms = loop_closure(pose_graph, self.key_frames,
                                                                            matcher=super().get_matcher(), cond_matrices=cond_matrices,
                                                                            mahalanobis_thresh=MAHALANOBIS_THRESH,
                                                                            pose_graph_initial_estimates=initial_estimates,
-                                                                           draw_supporting_matches_flag=True,
-                                                                           points_to_stop_by=True
+                                                                           draw_supporting_matches_flag=False,
+                                                                           points_to_stop_by=False
                                                                            )
+        self._good_mahalanobis_candidates = [(c[1], c[2]) for c in good_ms]
         self.show_all_loops_on_trajectory()
-        # self._final_estimated_trajectory = __cur_pose_graph_estimates
+        self._final_estimated_trajectory = self.get_final_estimated_trajectory(self.__cur_pose_graph_estimates)
 
     def compare_trajectory_to_gt(self):
         try:
@@ -258,3 +260,7 @@ class LoopClosure(TrajectorySolver):
     def show_all_loops_on_trajectory(self, suffix=""):
         from utils.plotters import plot_trajectory_with_loops
         plot_trajectory_with_loops(self.get_final_estimated_trajectory(), self.__successful_lc, path=f"plots/lc_{suffix}_")
+
+    def show_given_loops_on_trajectory(self, given_loops, suffix="given_loops"):
+        from utils.plotters import plot_trajectory_with_loops
+        plot_trajectory_with_loops(self.get_final_estimated_trajectory(), given_loops, path=f"plots/lc_{suffix}_")

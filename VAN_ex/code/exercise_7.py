@@ -24,7 +24,7 @@ if __name__ == "__main__":
     kf_to_covariance = {key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
     cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
     our_trajectory = optimized_global_keyframes_poses
-    pose_graph, cur_pose_graph_estimates, successful_lc = loop_closure(pose_graph, key_frames,
+    pose_graph, cur_pose_graph_estimates, successful_lc, _ = loop_closure(pose_graph, key_frames,
                                                                        matcher=matcher, cond_matrices=cond_matrices,
                                                                        mahalanobis_thresh=MAHALANOBIS_THRESH,
                                                                        pose_graph_initial_estimates=initial_estimates,

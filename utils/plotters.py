@@ -228,7 +228,7 @@ def draw_supporting_matches_general(file_index1, file_index2, matcher, matches, 
     plt.figure(figsize=(16, 9))
     plt.imshow(img3)
     plt.title("Supporting [Green], Unsupported [Red]" if supporting_indices is not None else "Matches between left_0 to left_1")
-    plt.savefig("lc_consensus_matches")
+    plt.savefig(f"plots/lc_consensus_matches_{file_index1}_{file_index2}")
 
 
 

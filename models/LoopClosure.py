@@ -203,7 +203,7 @@ def solve_trivial_bundle(reference_kf, candidate_kf, matching_data):
 
 
 def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estimates, matcher,
-                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=20,
+                 mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=30,
                  req_inliers_ratio=0.85, draw_supporting_matches_flag=False, points_to_stop_by=False,
                  compare_to_gt=False, show_localization_error=False, show_uncertainty=False):
     graph_for_shortest_path, edge_to_covariance = \
@@ -235,16 +235,17 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
                 min_md_index = i
                 print(f"current minimal md found is {min_md} between cur_kf {reference_kf} and prev_kf {prev_kf} ({i}-{j})")
             if mahalanobis_distance < mahalanobis_thresh:
-                candidates_with_small_m_distance.append(j)
+                candidates_with_small_m_distance.append((mahalanobis_distance, j))
                 good_ms.append((mahalanobis_distance, i, j))
-        candidates_with_small_m_distance.sort()
+        candidates_with_small_m_distance.sort(key=lambda element: element[0])
+        if len(candidates_with_small_m_distance) > 0:
+            print(f"for the {i}th KeyFrame, found {len(candidates_with_small_m_distance)} candidates to perform visual odometry with.\nContinuing with {min(max_candidates_num, len(candidates_with_small_m_distance))} best candidates")
         best_candidates = candidates_with_small_m_distance[:max_candidates_num]
-
+        best_candidates = [candidate[1] for candidate in best_candidates]
         # Step 2: perform consensus matching between current frame and relevant candidates
         candidates_after_consensus_matching = []
         should_optimize = False
         for candidate in best_candidates:
-            print(f"for the {i}th KeyFrame, found {len(best_candidates)} candidates to perform visual odometry with.")
             candidate_kf = key_frames[candidate]
             Rt, filtered_tracks, inliers_ratio, matches, supporting_indices = consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher)
             if Rt is None:
@@ -300,7 +301,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
         plot_pg_uncertainty_before_and_after_lc(pose_graph, cur_pose_graph_estimates)
     print(f"Overall, {len(successful_lc)} loop closures were detected.")
 
-    return pose_graph, cur_pose_graph_estimates, successful_lc
+    return pose_graph, cur_pose_graph_estimates, successful_lc, good_ms
 
 
 def get_trajectory_from_graph(values):
