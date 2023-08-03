@@ -107,11 +107,9 @@ class PNP(TrajectorySolver):
             self.solve_trajectory()
 
 
-
-
 class BundleAdjustment(TrajectorySolver):
 
-    def __init__(self,track_db):
+    def __init__(self,track_db, force_recompute=False):
         super().__init__(track_db)
         self.bundle_results = None
         self.optimized_relative_keyframes_poses = None
@@ -120,9 +118,10 @@ class BundleAdjustment(TrajectorySolver):
         self.global_3d_points = []
         self.key_frames = None
         self._final_estimated_trajectory = None
+        self.force_recompute = force_recompute
 
     def solve_trajectory(self):
-        self.bundle_results = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
+        self.bundle_results = load_bundle_results(path=PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS, force_recompute=self.force_recompute)
         bundle_windows = self.bundle_results[-2]
         self.key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
         bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
@@ -172,9 +171,9 @@ class BundleAdjustment(TrajectorySolver):
                                               path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT,
                                               mode="Bundle Adjustment")
 
-
     def get_final_estimated_trajectory(self):
         return self._final_estimated_trajectory
+
 
 class LoopClosure(TrajectorySolver):
 
@@ -183,7 +182,7 @@ class LoopClosure(TrajectorySolver):
         self.__global_3d_points_numpy = None
         self.__global_Rt_poses_in_numpy = None
         self.__pose_graph = None
-        self.__our_trajectory = None
+        self.__initial_trajectory = None
         self.__cur_pose_graph_estimates = None
         self.__successful_lc = None
         self.bundle_results = None
@@ -192,6 +191,7 @@ class LoopClosure(TrajectorySolver):
         self.optimized_relative_keyframes_poses = []
         self.global_3d_points = []
         self.key_frames = None
+        self._final_estimated_trajectory = None
 
 
     def solve_trajectory(self):
@@ -205,7 +205,7 @@ class LoopClosure(TrajectorySolver):
                                                                      cond_matrices)
         kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
         cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
-        self.__our_trajectory = optimized_global_keyframes_poses
+        self.__initial_trajectory = get_trajectory_from_graph(optimized_global_keyframes_poses)
         self.__pose_graph, self.__cur_pose_graph_estimates, self.__successful_lc = loop_closure(pose_graph, self.key_frames,
                                                                            matcher=super().get_matcher(), cond_matrices=cond_matrices,
                                                                            mahalanobis_thresh=MAHALANOBIS_THRESH,
@@ -213,6 +213,7 @@ class LoopClosure(TrajectorySolver):
                                                                            draw_supporting_matches_flag=True,
                                                                            points_to_stop_by=True
                                                                            )
+        self._final_estimated_trajectory = get_trajectory_from_graph(self.__pose_graph)
 
     def compare_trajectory_to_gt(self):
         try:
@@ -250,3 +251,15 @@ class LoopClosure(TrajectorySolver):
 
     def get_final_estimated_trajectory(self):
         return get_trajectory_from_graph(self.__cur_pose_graph_estimates)
+
+    def get_successful_lc(self):
+        return self.__successful_lc
+
+    def show_loop_between_two_keyframes(self, kf_1, kf_2, suffix=""):
+        assert (kf_1, kf_2) in self.__successful_lc or (kf_2, kf_1) in self.__successful_lc, "Can only show existing loop..."
+        from utils.plotters import plot_loop_between_two_frames
+        plot_loop_between_two_frames(self._final_estimated_trajectory, kf_1, kf_2, self.key_frames, path=f"plots/lc_{suffix}_")
+
+    def show_all_loops_on_trajectory(self, suffix=""):
+        from utils.plotters import plot_trajectory_with_loops
+        plot_trajectory_with_loops(self._final_estimated_trajectory, self.__successful_lc, path=f"plots/lc_{suffix}_")

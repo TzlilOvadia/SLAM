@@ -309,20 +309,6 @@ def get_trajectory_from_graph(values):
     return trajectory
 
 
-def plot_trajectory_with_loops(camera_positions, loop_closures, path="plots/"):
-    firsts = [lc[0] for lc in loop_closures]
-    seconds = [lc[1] for lc in loop_closures]
-    plt.figure()
-    plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
-    plt.scatter(x=camera_positions[firsts, 0], y=camera_positions[firsts, 2], color='green', label='first frame', s=10)
-    plt.scatter(x=camera_positions[seconds, 0], y=camera_positions[seconds, 2], color='red', label='second frame', s=10)
-    plt.xlabel("X")
-    plt.ylabel("Z")
-    plt.title(f"our trajectory with all loop closures")
-    plt.legend()
-    plt.savefig(path + f"lc_traj_with_all_loop_closures")
-
-
 def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
     cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)
@@ -380,26 +366,4 @@ def plot_pg_locations_error_graph_before_and_after_lc(pose_graph_after, values_a
     plot_localization_error_over_time(key_frames, trajectory_before, gt_trajectory, path=PATH_TO_SAVE_LOCALIZATION_ERROR_LOOP_CLOSURE_BEFORE)
 
 
-def plot_loop_between_two_frames(our_trajectory, first, second, key_frames, path="plots/lc_"):
-    camera_positions = np.array([pose.translation() for pose in our_trajectory])
-    plt.figure()
-    plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
-    plt.scatter(x=camera_positions[first, 0], y=camera_positions[first, 2], color='green', label='first frame', s=20)
-    plt.scatter(x=camera_positions[second, 0], y=camera_positions[second, 2], color='red', label='second frame', s=20)
-    plt.xlabel("X")
-    plt.ylabel("Z")
-    plt.title(f"compare frame {key_frames[first]} with {key_frames[second]}")
-    plt.legend()
-    plt.savefig(path + f"trajectory_{first}_{second}")
-    draw_matching_images(first, second, key_frames)
 
-
-def draw_matching_images(first, second, key_frames):
-    file_index1, file_index2 = key_frames[first], key_frames[second]
-    left1, _ = read_images(file_index1)
-    left2, _ = read_images(file_index2)
-    img3 = cv2.vconcat([cv2.cvtColor(left1, cv2.COLOR_GRAY2BGR), cv2.cvtColor(left2, cv2.COLOR_GRAY2BGR)])
-    plt.figure(figsize=(16, 9))
-    plt.imshow(img3)
-    plt.title(f"compare image {file_index1} and {file_index2}")
-    plt.savefig(f"plots/lc_compare_images_{first}_{second}")

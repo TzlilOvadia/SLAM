@@ -33,6 +33,48 @@ def gen_hist(data, bins, title="", x="X", y="Y"):
     plt.show()
 
 
+def plot_loop_between_two_frames(camera_positions, first, second, key_frames, path="plots/lc_"):
+    plt.figure()
+    plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
+    plt.scatter(x=camera_positions[first, 0], y=camera_positions[first, 2], color='green', label='first frame', s=20)
+    plt.scatter(x=camera_positions[second, 0], y=camera_positions[second, 2], color='red', label='second frame', s=20)
+    plt.xlabel("X")
+    plt.ylabel("Z")
+    plt.title(f"compare frame {key_frames[first]} with {key_frames[second]}")
+    plt.legend()
+    plt.savefig(path + f"trajectory_{first}_{second}")
+    draw_matching_images(first, second, key_frames)
+
+
+def draw_matching_images(first, second, key_frames, path="lc_compare_images"):
+    from utils.utils import read_images
+    file_index1, file_index2 = key_frames[first], key_frames[second]
+    left1, _ = read_images(file_index1)
+    left2, _ = read_images(file_index2)
+    img3 = cv2.vconcat([cv2.cvtColor(left1, cv2.COLOR_GRAY2BGR), cv2.cvtColor(left2, cv2.COLOR_GRAY2BGR)])
+    plt.figure(figsize=(16, 9))
+    plt.imshow(img3)
+    plt.title(f"compare image {file_index1} and {file_index2}")
+    plt.savefig(f"plots/{path}_{first}_{second}")
+
+
+def plot_trajectory_with_loops(camera_positions, loop_closures, path="plots/"):
+    firsts = [lc[0] for lc in loop_closures]
+    seconds = [lc[1] for lc in loop_closures]
+    plt.figure()
+    plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)
+    plt.scatter(x=camera_positions[firsts, 0], y=camera_positions[firsts, 2], color='green', label='first frame', s=10)
+    plt.scatter(x=camera_positions[seconds, 0], y=camera_positions[seconds, 2], color='red', label='second frame', s=10)
+    step = 25
+    for i in range(0, len(camera_positions[:, 0]), step):
+        plt.text(camera_positions[:, 0][i], camera_positions[:, 2][i], str(i), fontsize=6, ha='left', va='bottom')
+    plt.xlabel("X")
+    plt.ylabel("Z")
+    plt.title(f"our trajectory with all loop closures")
+    plt.legend()
+    plt.savefig(path + f"traj_with_all_loop_closures")
+
+
 def plot_uncertainty_over_time(keyframes, uncertainty_score, path="", suffix=""):
     plt.figure()
     plt.plot(keyframes, uncertainty_score)
