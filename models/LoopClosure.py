@@ -286,7 +286,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
                 edge_cost = edge_cost_func(conditional_covariance)
                 graph_for_shortest_path.add_edge(candidate, reference_kf, edge_cost)
                 edge_to_covariance[(candidate, reference_kf)] = conditional_covariance
-                successful_lc.append((i, candidate))
+                successful_lc.append((m_dist, i, candidate))
                 print(f"Successfully appended kfs ({i}-{candidate}) as a loop closure!")
                 should_optimize = True
 
@@ -300,8 +300,6 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
                                      title=f"optimized estimates trajectory with cov after: {len(successful_lc)} updates", scale=1,
                                      save_file=f"plots/optimized_estimates_trajectory_with_cov_after_{len(successful_lc)}")
                 prev_num_of_successful_lc = len(successful_lc)
-
-
     if compare_to_gt:
         plot_pg_locations_before_and_after_lc(pose_graph, cur_pose_graph_estimates)
     if show_localization_error:
@@ -309,8 +307,10 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
     if show_uncertainty:
         plot_pg_uncertainty_before_and_after_lc(pose_graph, cur_pose_graph_estimates)
     print(f"Overall, {len(successful_lc)} loop closures were detected.")
-
-    return pose_graph, cur_pose_graph_estimates, successful_lc, good_ms
+    worst_allowed_m_dist = np.percentile([lc[0] for lc in successful_lc], q=75)
+    final_loop_closures = [(lc[1], lc[2]) for lc in successful_lc if lc[0] <= worst_allowed_m_dist]
+    print(f"From them, {len(final_loop_closures)} were kept, with a max mahalanobis distance of {worst_allowed_m_dist}")
+    return pose_graph, cur_pose_graph_estimates, final_loop_closures, good_ms
 
 
 def get_inlier_ratio_threshold(distance, mahalanobis_threshold):
