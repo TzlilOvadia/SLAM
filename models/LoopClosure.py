@@ -28,8 +28,8 @@ def edge_cost_func(cond_mat=None, equal=False):
         return 0.000000001 * np.sqrt(1 / np.linalg.det(10 * cond_mat))
 
 
-def init_graph_for_shortest_path(pose_graph, key_frames, cond_matrices):
-    graph_for_shortest_path = dijkstar.Graph()
+def init_graph_for_shortest_path(pose_graph, key_frames, cond_matrices, undirected=False):
+    graph_for_shortest_path = dijkstar.Graph(undirected=undirected)
     edge_to_covariance = {}
     costs = []
     for i in range(len(key_frames) - 1):
@@ -53,7 +53,8 @@ def estimate_covariance_by_path(path, edge_to_covariance):
     for i in range(len(path) - 1):
         first = path[i]
         second = path[i + 1]
-        estimated_cov += edge_to_covariance[(first, second)]
+        edge = (first, second) if (first, second) in edge_to_covariance else (second, first)
+        estimated_cov += edge_to_covariance[edge]
     return estimated_cov
 
 
@@ -188,24 +189,31 @@ def solve_trivial_bundle(reference_kf, candidate_kf, matching_data):
     factor_graph, initial_estimates, landmarks = create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks)
     optimizer = gtsam.LevenbergMarquardtOptimizer(factor_graph, initial_estimates)
     try:
+        conditional_covariance = np.eye(6)
         optimized_estimates = optimizer.optimize()
+        key_vectors = gtsam.KeyVector()
+        key_vectors.append(gtsam.symbol(CAMERA, candidate_kf))
+        key_vectors.append(gtsam.symbol(CAMERA, reference_kf))  # TODO maybe its the other way around...
+        try:
+            bundle_joint_covariance = gtsam.Marginals(factor_graph, optimized_estimates)
+            information_mat_cick = bundle_joint_covariance.jointMarginalInformation(key_vectors).fullMatrix()
+            conditional_covariance = np.linalg.inv(information_mat_cick[6:, 6:])
+        except RuntimeError as e:
+            print('\033[91m' + f"Caught Exception When Calculating Marginals: {e}" + '\033[0m')
+
+        relative_pose = get_relative_pose_between_frames(candidate_kf, reference_kf,
+                                                         optimized_estimates)  # I think we want reference relative to candidate
+        return relative_pose, conditional_covariance, factor_graph, optimized_estimates
     except RuntimeError as e:
-        print(e)
+        print('\033[91m' + f"Caught Exception When Optimizing Trivial Bundle: {e}" + '\033[0m')
         return None
-    key_vectors = gtsam.KeyVector()
-    key_vectors.append(gtsam.symbol(CAMERA, candidate_kf))
-    key_vectors.append(gtsam.symbol(CAMERA, reference_kf))  # TODO maybe its the other way around...
-    bundle_joint_covariance = gtsam.Marginals(factor_graph, optimized_estimates)
-    information_mat_cick = bundle_joint_covariance.jointMarginalInformation(key_vectors).fullMatrix()
-    conditional_covariance = np.linalg.inv(information_mat_cick[6:, 6:])
-    relative_pose = get_relative_pose_between_frames(candidate_kf, reference_kf, optimized_estimates) # I think we want reference relative to candidate
-    return relative_pose, conditional_covariance, factor_graph, optimized_estimates
+
 
 
 def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estimates, matcher,
                  mahalanobis_thresh=MAHALANOBIS_THRESH, max_candidates_num=5, min_diff_between_loop_frames=30,
                  req_inliers_ratio=0.85, draw_supporting_matches_flag=False, points_to_stop_by=False,
-                 compare_to_gt=False, show_localization_error=False, show_uncertainty=False):
+                 compare_to_gt=False, show_localization_error=False, show_uncertainty=False, minimal_number_of_visual_matches=30):
     graph_for_shortest_path, edge_to_covariance = \
         init_graph_for_shortest_path(pose_graph=pose_graph, key_frames=key_frames, cond_matrices=cond_matrices)
     cur_pose_graph_estimates = pose_graph_initial_estimates
@@ -241,18 +249,19 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
         if len(candidates_with_small_m_distance) > 0:
             print(f"for the {i}th KeyFrame, found {len(candidates_with_small_m_distance)} candidates to perform visual odometry with.\nContinuing with {min(max_candidates_num, len(candidates_with_small_m_distance))} best candidates")
         best_candidates = candidates_with_small_m_distance[:max_candidates_num]
-        best_candidates = [candidate[1] for candidate in best_candidates]
         # Step 2: perform consensus matching between current frame and relevant candidates
         candidates_after_consensus_matching = []
         should_optimize = False
-        for candidate in best_candidates:
+        for m_dist, candidate in best_candidates:
             candidate_kf = key_frames[candidate]
             Rt, filtered_tracks, inliers_ratio, matches, supporting_indices = consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher)
             if Rt is None:
                 print(f"didn't find good transformation between {i}th kf and {candidate}th kf")
                 continue
             print(f"number of tracks between {i}th kf and {candidate}th kf after consensus matching is {len(filtered_tracks)}, with inliers ratio of {inliers_ratio}")
-            if inliers_ratio > req_inliers_ratio:
+            cur_req_inliers_ratio = get_inlier_ratio_threshold(m_dist, mahalanobis_thresh)
+            print(f"required inliers ratio for this candidate is {cur_req_inliers_ratio}, and total number of matches in it is {len(matches)}")
+            if inliers_ratio >= cur_req_inliers_ratio and len(matches) >= minimal_number_of_visual_matches:
                 if draw_supporting_matches_flag:
                     # draw_supporting_matches_general(candidate_kf, reference_kf, matcher, matches, supporting_indices)
                     draw_supporting_matches_flag = False
@@ -302,6 +311,10 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
     print(f"Overall, {len(successful_lc)} loop closures were detected.")
 
     return pose_graph, cur_pose_graph_estimates, successful_lc, good_ms
+
+
+def get_inlier_ratio_threshold(distance, mahalanobis_threshold):
+    return min(0.93, 0.7 + 0.5 * np.sqrt(distance / mahalanobis_threshold))
 
 
 def get_trajectory_from_graph(values):
