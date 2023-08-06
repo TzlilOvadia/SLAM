@@ -17,9 +17,7 @@ TOP_POV = 80
 SIDE_POV = -120
 
 
-
-
-def gen_hist(data, bins, title="", x="X", y="Y"):
+def gen_hist(data, bins, title="", x="X", y="Y", path=""):
     """
     :param data:
     :param bins:
@@ -30,7 +28,10 @@ def gen_hist(data, bins, title="", x="X", y="Y"):
     ax.set_title(title)
     plt.ylabel(y)
     plt.xlabel(x)
-    plt.show()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
 
 
 def plot_loop_between_two_frames(camera_positions, first, second, key_frames, path="plots/lc_"):
@@ -523,7 +524,7 @@ def plot_regions_around_matching_pixels(left, right, x1, y1, x2, y2, frame_index
         plt.show()
 
 
-def plot_dict(d, x_title='', y_title='', title=''):
+def plot_dict(d, x_title='', y_title='', title='', path=""):
     x = []
     y = []
     for k, v in d.items():
@@ -534,16 +535,22 @@ def plot_dict(d, x_title='', y_title='', title=''):
     plt.xlabel(x_title)
     plt.ylabel(y_title)
     plt.title(title)
-    plt.show()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
 
 
-def plot_connectivity_graph(frame_num, outgoing_tracks):
+def plot_connectivity_graph(frame_num, outgoing_tracks, path=""):
     plt.figure()
     plt.plot(frame_num, outgoing_tracks)
     plt.xlabel("frame")
     plt.ylabel("outgoing tracks")
     plt.title("Connectivity")
-    plt.show()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
 
 
 def plot_reprojection_errors(frame_ids, left_errors, right_errors, frame):

@@ -104,7 +104,6 @@ class PNP(TrajectorySolver):
         if self.force_recompute or self.get_deserialization_result() != SUCCESS:
             _, self._track_db = track_camera_for_many_images()
 
-
     def get_absolute_localization_error(self, path_suffix=""):
         try:
             plot_localization_error_over_time(np.arange(len(list(self._track_db.get_frameIds()))), self._track_db.camera_positions, self._gt_trajectory,
@@ -115,6 +114,48 @@ class PNP(TrajectorySolver):
             self.solve_trajectory()
             plot_localization_error_over_time(np.arange(len(list(self._track_db.get_frameIds()))), self._track_db.camera_positions, self._gt_trajectory,
                                               path="plots/pnp_localization_error_vs_key_frames" + path_suffix, mode="PNP")
+
+    def show_basic_tracking_statistics(self):
+        track_db = self._track_db
+        print("Printing some statistics of the tracks data in the database...")
+        # Display Total Number of Tracks
+        print(f"Total Number of Non-trivial Tracks: {track_db.get_num_tracks()}")
+        # Display Total Number of Frames
+        print(f"Total Number of Frames: {track_db.get_num_frames()}")
+        # Display Mean Track Length
+        print(f"Mean Track Length: {track_db.get_mean_track_length()}")
+        # Display Maximal Track Length
+        print(f"Maximal Track Length: {track_db.get_max_track()}")
+        # Display Mininal Track Length
+        print(f"Minimal Track Length: {track_db.get_min_track()}")
+        # Display Mean Number of Frame Links
+        print(f"Mean Number of Frame Links (number of tracks on an average image): {track_db.get_mean_frame_links()}")
+
+    def show_connectivity_graph(self, path="connectivity_graph", suffix=""):
+
+        from utils.plotters import plot_connectivity_graph
+        track_db = self._track_db
+        print("Calculating Connectivity Graph and Plotting it...")
+        frame_nums, outgoint_tracks_in_frame = track_db.calculate_connectivity_data()
+        plot_connectivity_graph(frame_nums, outgoint_tracks_in_frame, path=path + suffix)
+
+    def show_inliers_ratio_graph(self, path="inliers_ratio_graph", suffix=""):
+        from utils.plotters import plot_dict
+        track_db = self._track_db
+        print(f"Getting the Frame to Inliers Ratio Data and Plotting it...")
+        inliers_ratio_dict = track_db.get_inliers_ratio_per_frame()
+        plot_dict(inliers_ratio_dict, x_title='Frame Index', y_title='Inliers Ratio',
+                  title='Inliers Ratio Per Frame Index', path=path + suffix)
+
+    def show_track_length_histogram(self, path="track_length_histogram", suffix=""):
+        from utils.plotters import gen_hist
+        track_db = self._track_db
+        print(f"Getting the Track Length Data and Plotting it...")
+        track_lengths = track_db.get_track_length_data()
+        gen_hist(track_lengths, bins=len(np.unique(track_lengths)), title="Track Length Histogram", x="Track Length",
+                 y="Track #", path=path+suffix)
+
+
 
 
 class BundleAdjustment(TrajectorySolver):
