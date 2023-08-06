@@ -23,7 +23,7 @@ def plot_relative_location_estimation_error(relative_dist_estimations, mode="", 
     for length, relative_dist_estimation, key_frames, mean_error in relative_dist_estimations:
         plt.plot(key_frames, relative_dist_estimation, label=f"Seq length: {length} Mean Error: {np.round(mean_error, 5)}")
     plt.xlabel("frame")
-    plt.ylabel("location error (meters)")
+    plt.ylabel("location error per meter")
     plt.title(f"Relative {mode} Estimation Location Error With Sequences Of...")
     plt.legend()
     if path:
@@ -38,7 +38,7 @@ def plot_relative_angle_estimation_error(relative_angle_estimations, mode="", pa
     for length, relative_angle_estimation, key_frames, mean_error in relative_angle_estimations:
         plt.plot(key_frames, relative_angle_estimation, label=f"Seq Length: {length} Mean Error: {np.round(mean_error, 5)}")
     plt.xlabel("frame")
-    plt.ylabel("Angle error (radians)")
+    plt.ylabel("Angle error (degrees/meter)")
     plt.title(f"Relative {mode} Estimation Angle Error With Sequences Of...")
     plt.legend()
     if path:

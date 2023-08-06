@@ -64,6 +64,58 @@ class TrajectorySolver:
         plot_absolute_xyz_location_diff(x_error, y_error, z_error, total_norm_error, key_frames, path=path + "_location_", mode=mode)
         plot_absolute_angle_diff_composition(angles_diff, key_frames, path=path + "_angles_", mode=mode)
 
+
+    def get_relative_estimation_error(self, sequence_lengths=(100, 300, 800), mode="", path_suffix=""):
+        from utils.plotters import plot_relative_location_estimation_error, plot_relative_angle_estimation_error
+        from utils.utils import angle_between
+        from models.BundleAdjustment import get_relative_transformation_same_source_cs
+        estimated_global_poses = self.get_estimated_poses_matrices()
+        gt_global_poses = self.get_gt_poses()
+        estimated_camera_positions = self.get_final_estimated_trajectory()
+        gt_camera_positions = self.get_gt_trajectory()
+        gt_camera_positions_diffs = np.linalg.norm(gt_camera_positions[1:] - gt_camera_positions[:-1], axis=1)
+        relative_dist_estimations = []
+        relative_angle_estimations = []
+        for length in sequence_lengths:
+            kf_sequences = self.get_key_frames_sequences(length)
+            estimated_relative_poses = np.array([get_relative_transformation_same_source_cs(estimated_global_poses[j],
+                                                                                            estimated_global_poses[i])
+                                                 for i, j in kf_sequences])
+
+            gt_relative_poses = np.array([get_relative_transformation_same_source_cs(gt_global_poses[j],
+                                                                                     gt_global_poses[i])
+                                          for i, j in kf_sequences])
+
+
+            estimated_relative_locations = np.array([estimated_camera_positions[i] - estimated_camera_positions[j]
+                                                     for i, j in kf_sequences])
+
+            gt_relative_locations = np.array([gt_camera_positions[i] - gt_camera_positions[j]
+                                                     for i, j in kf_sequences])
+
+            dist_denominator = np.array([np.sum(gt_camera_positions_diffs[i: j]) for i, j in kf_sequences])
+            dist_numerator = np.linalg.norm(estimated_relative_locations - gt_relative_locations, axis=1)
+            relative_dist_estimation = dist_numerator / dist_denominator
+            key_frames = self.key_frames[:len(kf_sequences)]
+            mean_relative_dist_estimation = np.mean(relative_dist_estimation)
+            relative_dist_estimations.append((length, relative_dist_estimation, key_frames, mean_relative_dist_estimation))
+
+
+            angle_diffs = np.array([angle_between(estimated_relative_locations[i], gt_relative_locations[i])
+                                                  for i in range(len(estimated_relative_locations))])
+
+            estimated_relative_rotations = estimated_relative_poses[:, :, :-1]
+            gt_relative_rotations = gt_relative_poses[:, :, :-1]
+            angle_diffs = self.get_angle_diff_between_given_rotations(estimated_relative_rotations, gt_relative_rotations)
+
+            angle_diffs = np.rad2deg(angle_diffs)
+            relative_angle_estimation = angle_diffs / dist_denominator
+            mean_relative_angle_estimation = np.mean(relative_angle_estimation)
+            relative_angle_estimations.append((length, relative_angle_estimation, key_frames, mean_relative_angle_estimation))
+        plot_relative_location_estimation_error(relative_dist_estimations, mode=mode, path="relative_location_error_" + path_suffix)
+        plot_relative_angle_estimation_error(relative_angle_estimations, mode=mode, path="relative_angle_error_" + path_suffix)
+
+
     def compare_trajectory_to_gt(self):
         raise NotImplementedError("Subclasses should implement this!")
 
@@ -122,6 +174,12 @@ class TrajectorySolver:
             Matcher: The Matcher object.
         """
         return self.__matcher
+
+    def get_key_frames_sequences(self, length):
+        import bisect
+        key_frames = self.key_frames
+        res = [(i, bisect.bisect_right(key_frames, kf + length-0.001)) for i, kf in enumerate(key_frames) if bisect.bisect_right(key_frames, kf + length-0.001) < len(key_frames)]
+        return res
 
     def get_trajectory_from_poses(self, poses):
         trajectory = np.array([pose.translation() for pose in poses])
@@ -284,42 +342,6 @@ class PNP(TrajectorySolver):
         plot_median_projection_error_by_distance(lengths_to_mean_errors, path=path+suffix, title_suffix=suffix)
         return lengths_to_mean_errors
 
-    def get_relative_estimation_error(self):
-        from utils.plotters import plot_relative_location_estimation_error, plot_relative_angle_estimation_error
-        from models.BundleAdjustment import get_relative_transformation_same_source_cs
-        estimated_global_poses = self.get_estimated_poses_matrices()
-        gt_global_poses = self.get_gt_poses()
-        gt_camera_positions = self.get_gt_trajectory()
-        gt_camera_positions_diffs = np.linalg.norm(gt_camera_positions[1:] - gt_camera_positions[:-1], axis=1)
-        sequence_lengths = [100, 300, 800]
-        relative_dist_estimations = []
-        relative_angle_estimations = []
-        for length in sequence_lengths:
-            estimated_relative_poses = np.array([get_relative_transformation_same_source_cs(estimated_global_poses[i + length],
-                                                                                            estimated_global_poses[i])
-                                                 for i in range(len(estimated_global_poses) - length)])
-            gt_relative_poses = np.array([get_relative_transformation_same_source_cs(gt_global_poses[i + length], gt_global_poses[i])
-                                          for i in range(len(gt_global_poses) - length)])
-            estimated_relative_locations = estimated_relative_poses[:, :, -1]
-            gt_relative_locations = gt_relative_poses[:, :, -1]
-
-            dist_denominator = np.array([np.sum(gt_camera_positions_diffs[i: i+length]) for i in range(len(estimated_global_poses) - length)])
-            dist_numerator = np.linalg.norm(estimated_relative_locations - gt_relative_locations, axis=1)
-            relative_dist_estimation = dist_numerator / dist_denominator
-            key_frames = self.key_frames[:-length]
-            mean_relative_dist_estimation = np.mean(relative_dist_estimation)
-            relative_dist_estimations.append((length, relative_dist_estimation, key_frames, mean_relative_dist_estimation))
-
-            estimated_relative_rotations = estimated_relative_poses[:, :, :-1]
-            gt_relative_rotations = gt_relative_poses[:, :, :-1]
-            angle_diffs = self.get_angle_diff_between_given_rotations(estimated_relative_rotations, gt_relative_rotations)
-            relative_angle_estimation = angle_diffs / dist_denominator
-            mean_relative_angle_estimation = np.mean(relative_angle_estimation)
-            relative_angle_estimations.append((length, relative_angle_estimation, key_frames, mean_relative_angle_estimation))
-        plot_relative_location_estimation_error(relative_dist_estimations,  mode="PNP", path="pnp_relative_location_error")
-        plot_relative_angle_estimation_error(relative_angle_estimations, mode="PNP", path="pnp_relative_angle_error")
-        a=5
-
 class BundleAdjustment(TrajectorySolver):
 
     def __init__(self, force_recompute=False, path_to_save_track_db=PATH_TO_SAVE_TRACKER_FILE,
@@ -446,7 +468,6 @@ class BundleAdjustment(TrajectorySolver):
         optimized_median_factor_errors = np.array(optimized_median_factor_errors)
         key_frames = self.key_frames[:-1]
         plot_median_factor_error(initial_median_factor_errors, optimized_median_factor_errors, key_frames, path=path+suffix)
-
 
 class LoopClosure(TrajectorySolver):
 
