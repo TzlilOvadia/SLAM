@@ -132,7 +132,6 @@ class PNP(TrajectorySolver):
         print(f"Mean Number of Frame Links (number of tracks on an average image): {track_db.get_mean_frame_links()}")
 
     def show_connectivity_graph(self, path="connectivity_graph", suffix=""):
-
         from utils.plotters import plot_connectivity_graph
         track_db = self._track_db
         print("Calculating Connectivity Graph and Plotting it...")
@@ -154,6 +153,43 @@ class PNP(TrajectorySolver):
         track_lengths = track_db.get_track_length_data()
         gen_hist(track_lengths, bins=len(np.unique(track_lengths)), title="Track Length Histogram", x="Track Length",
                  y="Track #", path=path+suffix)
+
+    def show_reprojection_error_for_tracks_at_given_length(self, length, path="reprojection_error_for_length_histogram", suffix=""):
+        from utils.plotters import gen_hist
+        from utils.utils import read_cameras, read_gt, least_squares, project_point_on_image
+        track_db = self._track_db
+        tracks = track_db.get_all_tracks_of_length(length=length)
+        k, m1, m2 = read_cameras()
+        print(f"Calculating reprojection error from last frame to first for tracks in length {length}...")
+        gt_extrinsic_matrices = read_gt()
+        reprojection_errors = []
+        for trackId, track_data in tracks:
+            # triangulating from last frame on track
+            track_point_feature_location, track_point_frameId = track_data[-1][1], track_data[-1][2]
+            p1 = track_point_feature_location[0], track_point_feature_location[2]
+            p2 = track_point_feature_location[1], track_point_feature_location[2]
+            Pmat = gt_extrinsic_matrices[track_point_frameId]
+            Qmat = Pmat.copy()
+            Qmat[:, -1] = Qmat[:, -1] + m2[:, -1]
+            triangulated_3d_point = least_squares(p1, p2, k @ Pmat, k @ Qmat)
+
+            # reprojecting from last frame to first frame
+            _, feature_location, frameId = track_data[0]
+            x_l, x_r, y = feature_location
+            tracked_feature_location_left = np.array([x_l, y])
+            current_left_extrinsic_matrix = gt_extrinsic_matrices[frameId]
+            projected_point_on_left = project_point_on_image(triangulated_3d_point, current_left_extrinsic_matrix,
+                                                             k)
+            # calculating reprojection error
+            reprojection_error_left = np.linalg.norm(tracked_feature_location_left - projected_point_on_left)
+            reprojection_errors.append((trackId, reprojection_error_left))
+
+        errors = np.array([re[1] for re in reprojection_errors])
+        suffix = str(length) + "_" + suffix
+        bins = len(np.unique(errors.astype(int)))
+        gen_hist(errors, bins=bins, title=f"Reprojection Errors Histogram for Tracks of length {length}", x="Reprojection Error",
+                 y="Track #", path=path+suffix)
+        return reprojection_errors
 
 
 

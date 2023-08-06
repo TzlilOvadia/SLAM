@@ -13,6 +13,7 @@ if __name__ == "__main__":
     print("Python version:", sys.version)
     print("#################### Starting PNP segment ####################")
     pnp_solver = PNP(force_recompute=False)
+    pnp_solver.show_reprojection_error_for_tracks_at_given_length(length=10)
     pnp_solver.solve_trajectory()
     # pnp_solver.get_absolute_localization_error()
     pnp_cam_pos = pnp_solver.get_final_estimated_trajectory()

@@ -222,6 +222,13 @@ class TrackDatabase:
             return random.choice(tracks_of_given_length)
         return None
 
+    def get_all_tracks_of_length(self, length):
+        tracks_of_given_length = []
+        for trackId, track in self._tracks.items():
+            if len(track) == length:
+                tracks_of_given_length.append((trackId, track))
+        return tracks_of_given_length
+
     def calculate_connectivity_data(self):
         number_of_frames = self._num_frames
         x = np.arange(number_of_frames)
