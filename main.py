@@ -14,7 +14,8 @@ if __name__ == "__main__":
     print("#################### Starting PNP segment ####################")
     pnp_solver = PNP(force_recompute=False)
     #pnp_solver.show_reprojection_error_for_tracks_at_given_length(length=10)
-    pnp_solver.show_reprojection_error_per_distance(length=20)
+    #pnp_solver.get_absolute_estimation_error()
+    #pnp_solver.show_reprojection_error_per_distance(length=20)
     pnp_solver.solve_trajectory()
     # pnp_solver.get_absolute_localization_error()
     pnp_cam_pos = pnp_solver.get_final_estimated_trajectory()
@@ -22,7 +23,6 @@ if __name__ == "__main__":
     print("#################### Starting Bundle Adjustment segment ####################")
     bundle_adjustment_solver = BundleAdjustment(force_recompute=False)
     bundle_adjustment_solver.solve_trajectory()
-    bundle_adjustment_solver.get_median_factor_error_graph()
     bundle_adjustment_cam_pos = bundle_adjustment_solver.get_final_estimated_trajectory()
     #bundle_adjustment_solver.get_absolute_localization_error()
     #bundle_adjustment_solver.compare_trajectory_to_gt()
@@ -35,6 +35,9 @@ if __name__ == "__main__":
     #loop_closure_solver.get_absolute_localization_error()
     # plot_multiple_trajectories(pnp_cam_pos, bundle_adjustment_cam_pos, loop_closure_cam_pos, get_gt_trajectory(),
     #                            path="plots/all_trajectories_comparison")
+    pnp_solver.get_absolute_estimation_error(path="pnp_absolute_estimation_error", mode="PNP", invert_gt_poses=False)
+    bundle_adjustment_solver.get_absolute_estimation_error(path="bundle_adjustment_absolute_estimation_error", mode="BUNDLE ADJUSTMENT", invert_gt_poses=True)
+    loop_closure_solver.get_absolute_estimation_error(path="loop_closure_absolute_estimation_error", mode="LOOP_CLOSURE", invert_gt_poses=True)
     key_frames = loop_closure_solver.key_frames
     plot_multiple_trajectories(camera_positions_PNP=pnp_solver.get_final_estimated_trajectory()[key_frames],
                                camera_positions_bundle_adjustment=bundle_adjustment_solver.get_final_estimated_trajectory(),

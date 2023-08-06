@@ -558,3 +558,37 @@ def least_squares(p1, p2, Pmat, Qmat):
     # Transform from 4d to 3d:
     solution_3d = solution_4d[:3] / solution_4d[-1]
     return solution_3d
+
+
+def isRotationMatrix(R):
+    Rt = np.transpose(R)
+    shouldBeIdentity = np.dot(Rt, R)
+    I = np.identity(3, dtype=R.dtype)
+    n = np.linalg.norm(I - shouldBeIdentity)
+    return n < 1e-6
+
+# Calculates rotation matrix to euler angles
+def rotationMatrixToEulerAngles(R):
+    import math
+    assert (isRotationMatrix(R))
+
+    sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
+
+    singular = sy < 1e-6
+
+    if not singular:
+        x = math.atan2(R[2, 1], R[2, 2])
+        y = math.atan2(-R[2, 0], sy)
+        z = math.atan2(R[1, 0], R[0, 0])
+    else:
+        x = math.atan2(-R[1, 2], R[1, 1])
+        y = math.atan2(-R[2, 0], sy)
+        z = 0
+
+    return np.array([x, y, z])
+
+def get_rotation_matrices_distances(mats1, mats2):
+    p_matrices = np.array([mats1[i] @ mats2[i].T for i in range(len(mats1))])
+    p_traces = np.array([np.trace(p) for p in p_matrices])
+    diff = np.nan_to_num(np.arccos((p_traces - 1) * 0.5))
+    return diff

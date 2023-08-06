@@ -323,6 +323,11 @@ def get_trajectory_from_graph(values):
     return trajectory
 
 
+def get_poses_from_graph(values):
+    all_poses = gtsam.utilities.extractPose3(values).reshape(-1, 4, 3).transpose(0, 2, 1)
+    return all_poses
+
+
 def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after):
     bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
     cond_matrices = load_bundle_results(PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS)

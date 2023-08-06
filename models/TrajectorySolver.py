@@ -6,7 +6,7 @@ from models.BundleAdjustment import bundle_adjustment, create_pose_graph, load_b
 from utils.utils import track_camera_for_many_images, get_gt_trajectory
 from utils.plotters import plot_trajectories, plot_localization_error_over_time
 from models.LoopClosure import loop_closure, plot_pg_locations_before_and_after_lc,\
-    plot_pg_locations_error_graph_before_and_after_lc, plot_pg_uncertainty_before_and_after_lc, get_trajectory_from_graph
+    plot_pg_locations_error_graph_before_and_after_lc, plot_pg_uncertainty_before_and_after_lc, get_trajectory_from_graph, get_poses_from_graph
 
 
 class TrajectorySolver:
@@ -17,8 +17,10 @@ class TrajectorySolver:
         self.deserialization_result = None
         self._track_db = TrackDatabase()
         self._load_tracks_to_db(path=path_to_track_db)
-        self._gt_trajectory = get_gt_trajectory()
+        self.key_frames = None
+        self._gt_trajectory = self.get_gt_trajectory()
         self._predicted_trajectory = None
+
 
 
     def get_rotation_error(self):
@@ -30,11 +32,46 @@ class TrajectorySolver:
     def get_absolute_localization_error(self):
         raise NotImplementedError("Subclasses should implement this!")
 
-    def get_absolute_estimation_error(self):
-        raise NotImplementedError("Subclasses should implement this!")
+    def get_angle_diff(self, invert_gt_poses=False):
+        from utils.utils import get_rotation_matrices_distances
+        camera_gt_poses = self.get_gt_poses()
+        camera_estimated_poses = self.get_estimated_poses_matrices()
+        gt_rotations = camera_gt_poses[:, :, :-1]
+        if invert_gt_poses:
+            ...
+            # gt_rotations = np.array([m.T for m in gt_rotations])
+        angles_diff = get_rotation_matrices_distances(camera_estimated_poses[:, :, :-1], gt_rotations)
+        return angles_diff
+
+
+    def get_xyz_diffs(self):
+        camera_estimated_xyz_positions = self.get_final_estimated_trajectory()
+        camera_gt_xyz_positions = self.get_gt_trajectory()
+        xyz_positions_diff = np.abs(camera_gt_xyz_positions - camera_estimated_xyz_positions)
+        x_error, y_error, z_error = xyz_positions_diff[:, 0], xyz_positions_diff[:, 1], xyz_positions_diff[:, 2]
+        total_norm_error = np.linalg.norm(xyz_positions_diff, axis=1)
+        return x_error, y_error, z_error, total_norm_error
+
+    def get_absolute_estimation_error(self, path, mode, invert_gt_poses=False):
+        from utils.plotters import plot_absolute_xyz_location_diff, plot_absolute_angle_diff_composition
+        key_frames = self.key_frames
+        x_error, y_error, z_error, total_norm_error = self.get_xyz_diffs()
+        angles_diff = self.get_angle_diff(invert_gt_poses)
+        plot_absolute_xyz_location_diff(x_error, y_error, z_error, total_norm_error, key_frames, path=path + "_location_", mode=mode)
+        plot_absolute_angle_diff_composition(angles_diff, key_frames, path=path + "_angles_", mode=mode)
 
     def compare_trajectory_to_gt(self):
         raise NotImplementedError("Subclasses should implement this!")
+
+    def get_gt_poses(self):
+        from utils.utils import read_gt
+        return read_gt()
+
+    def get_estimated_poses_matrices(self):
+        raise NotImplementedError("Subclasses should implement this!")
+
+    def get_gt_trajectory(self):
+        return get_gt_trajectory()
 
     def get_final_estimated_trajectory(self):
         """
@@ -43,7 +80,7 @@ class TrajectorySolver:
         Returns:
             list: List of camera positions.
         """
-        return self._track_db.camera_positions
+        return self._final_estimated_trajectory
 
     def _load_tracks_to_db(self, path=PATH_TO_SAVE_TRACKER_FILE):
         """
@@ -89,12 +126,14 @@ class TrajectorySolver:
 
 class PNP(TrajectorySolver):
 
-    def get_absolute_estimation_error(self):
-        pass
+
 
     def __init__(self, force_recompute=False, path_to_save_track_db=PATH_TO_SAVE_TRACKER_FILE):
         super().__init__(path_to_track_db=path_to_save_track_db)
         self.force_recompute = force_recompute
+        self._final_estimated_trajectory = self._track_db.camera_positions
+        self.key_frames = np.arange(self._track_db.get_num_frames())
+
 
     def compare_trajectory_to_gt(self, path_suffix=""):
         plot_trajectories(self._track_db.camera_positions, self._gt_trajectory, path=PATH_TO_SAVE_COMPARISON_TO_GT_PNP + path_suffix,
@@ -103,6 +142,11 @@ class PNP(TrajectorySolver):
     def solve_trajectory(self):
         if self.force_recompute or self.get_deserialization_result() != SUCCESS:
             _, self._track_db = track_camera_for_many_images()
+            self._final_estimated_trajectory = self._track_db.camera_positions
+
+    def get_estimated_poses_matrices(self):
+        return self._track_db.get_extrinsic_matrices()
+
 
     def get_absolute_localization_error(self, path_suffix=""):
         try:
@@ -200,6 +244,7 @@ class PNP(TrajectorySolver):
         return reprojection_errors
 
 
+
     def show_reprojection_error_per_distance(self, length, path="pnp_reprojection_error_per_distance", suffix="PNP"):
         from utils.plotters import plot_median_projection_error_by_distance
         from utils.utils import read_cameras, read_gt, least_squares, project_point_on_image
@@ -249,11 +294,10 @@ class BundleAdjustment(TrajectorySolver):
         self.optimized_global_keyframes_poses = None
         self.bundle_3d_points = None
         self.global_3d_points = []
-        self.key_frames = None
-        self._final_estimated_trajectory = None
         self.force_recompute = force_recompute
         self.path_to_save_db = path_to_save_track_db
         self.path_to_save_ba = path_to_save_ba
+        self.optimized_estimates = None
 
     def solve_trajectory(self):
         self.bundle_results = load_bundle_results(path=self.path_to_save_ba, force_recompute=self.force_recompute, track_db_path=self.path_to_save_db)
@@ -262,12 +306,26 @@ class BundleAdjustment(TrajectorySolver):
         bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
         cond_matrices = self.bundle_results
         key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
-        _, initial_estimates, _ = create_pose_graph(bundle_results,
+        _, self.optimized_estimates, _ = create_pose_graph(bundle_results,
                                                                     optimized_relative_keyframes_poses,
                                                                     optimized_global_keyframes_poses,
                                                                     cond_matrices)
-        self._final_estimated_trajectory = get_trajectory_from_graph(initial_estimates)
+        self._final_estimated_trajectory = get_trajectory_from_graph(self.optimized_estimates)
         self._gt_trajectory = get_gt_trajectory()[key_frames]
+        self.optimized_global_keyframes_poses = optimized_global_keyframes_poses
+        a=5
+
+    def get_gt_trajectory(self):
+        if self.key_frames is None:
+            return []
+        return get_gt_trajectory()[self.key_frames]
+
+    def get_gt_poses(self):
+        from utils.utils import read_gt
+        return read_gt()[self.key_frames]
+
+    def get_estimated_poses_matrices(self):
+        return get_poses_from_graph(self.optimized_estimates)
 
     def compare_trajectory_to_gt(self, path_suffix=""):
         gt_camera_positions = self._gt_trajectory
@@ -305,9 +363,6 @@ class BundleAdjustment(TrajectorySolver):
                                               gt_camera_positions=self._gt_trajectory,
                                               path=PATH_TO_SAVE_LOCALIZATION_ERROR_BUNDLE_ADJUSTMENT + path_suffix,
                                               mode="Bundle Adjustment")
-
-    def get_final_estimated_trajectory(self):
-        return self._final_estimated_trajectory
 
     def get_mean_factor_error_graph(self, path="mean_factor_error_graph", suffix=""):
         from utils.plotters import plot_mean_factor_error
@@ -375,8 +430,6 @@ class LoopClosure(TrajectorySolver):
         self.bundle_3d_points = None
         self.optimized_relative_keyframes_poses = []
         self.global_3d_points = []
-        self.key_frames = None
-        self._final_estimated_trajectory = None
         self._good_mahalanobis_candidates = None
         self._initial_trajectory = None
         self.path_to_save_db = path_to_save_track_db
@@ -409,9 +462,12 @@ class LoopClosure(TrajectorySolver):
                                                                                                           points_to_stop_by=False
                                                                                                           )
             self._good_mahalanobis_candidates = [(c[1], c[2]) for c in good_ms]
-            self._final_estimated_trajectory = self.get_final_estimated_trajectory()
+            self._final_estimated_trajectory = get_trajectory_from_graph(self._cur_pose_graph_estimates)
             self._gt_trajectory = get_gt_trajectory()[self.key_frames]
             self.serialize(self.path_to_save_lc)
+
+    def get_estimated_poses_matrices(self):
+        return get_poses_from_graph(self._cur_pose_graph_estimates)
 
     def compare_trajectory_to_gt(self, path_suffix=""):
         gt_camera_positions =  self._gt_trajectory
@@ -446,8 +502,14 @@ class LoopClosure(TrajectorySolver):
             self.solve_trajectory()
             plot_pg_uncertainty_before_and_after_lc(self._pose_graph, self._cur_pose_graph_estimates)
 
-    def get_final_estimated_trajectory(self):
-        return get_trajectory_from_graph(self._cur_pose_graph_estimates)
+    def get_gt_trajectory(self):
+        if self.key_frames is None:
+            return []
+        return get_gt_trajectory()[self.key_frames]
+
+    def get_gt_poses(self):
+        from utils.utils import read_gt
+        return read_gt()[self.key_frames]
 
     def get_successful_lc(self):
         return self._successful_lc

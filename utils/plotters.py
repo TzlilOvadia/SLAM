@@ -17,6 +17,51 @@ TOP_POV = 80
 SIDE_POV = -120
 
 
+def plot_absolute_xyz_location_diff(x_error, y_error, z_error, total_norm_error, key_frames, path="", mode=""):
+    plt.figure()
+    plt.plot(key_frames, x_error, label='X_error')
+    plt.plot(key_frames, y_error, label='Y_error')
+    plt.plot(key_frames, z_error, label='Z_error')
+    plt.plot(key_frames, total_norm_error, label='total_error')
+    plt.xlabel("KeyFrame Index")
+    plt.ylabel("Location error (meters)")
+    plt.legend()
+    plt.title(f"{mode} KeyFrame Absolute Location Estimation Error")
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
+
+def plot_absolute_angle_diff_composition(diff, key_frames, path="", mode=""):
+    plt.figure()
+    plt.plot(key_frames, diff, label='angle_diff')
+    plt.xlabel("KeyFrame Index")
+    plt.ylabel("Angle Diff Along Eigenvector (Radians)")
+    plt.legend()
+    plt.title(f"{mode} Absolute Angle Estimation Error")
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
+
+def plot_absolute_angle_diff_euler(x_angle_error, y_angle_error, z_angle_error, angle_norm_diff, key_frames, path="", mode=""):
+    plt.figure()
+    plt.plot(key_frames, x_angle_error, label='a_error')
+    plt.plot(key_frames, y_angle_error, label='b_error')
+    plt.plot(key_frames, z_angle_error, label='c_error')
+    plt.plot(key_frames, angle_norm_diff, label='norm_of_angles_diff')
+    plt.xlabel("KeyFrame Index")
+    plt.ylabel("Euler Angles Diff")
+    plt.legend()
+    plt.title(f"{mode} KeyFrame Absolute Angle Estimation Error Based on Euler Angles")
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
+
 def gen_hist(data, bins, title="", x="X", y="Y", path=""):
     """
     :param data:
