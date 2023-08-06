@@ -21,6 +21,7 @@ if __name__ == "__main__":
     print("#################### Starting Bundle Adjustment segment ####################")
     bundle_adjustment_solver = BundleAdjustment(force_recompute=False)
     bundle_adjustment_solver.solve_trajectory()
+    bundle_adjustment_solver.get_median_factor_error_graph()
     bundle_adjustment_cam_pos = bundle_adjustment_solver.get_final_estimated_trajectory()
     #bundle_adjustment_solver.get_absolute_localization_error()
     #bundle_adjustment_solver.compare_trajectory_to_gt()

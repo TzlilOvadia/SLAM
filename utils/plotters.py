@@ -34,6 +34,34 @@ def gen_hist(data, bins, title="", x="X", y="Y", path=""):
         plt.show()
 
 
+def plot_mean_factor_error(initial_errors, optimized_errors, key_frames, path=""):
+    plt.figure()
+    plt.plot(key_frames, initial_errors, label="Initial Error", color='orange')
+    plt.plot(key_frames, optimized_errors, label="Optimized Error", color='blue')
+    plt.xlabel("Bundle Starting at Frame Idx")
+    plt.ylabel("Mean Factor Error")
+    plt.title("Mean Factor Error Before and After Bundle Optimization")
+    plt.legend()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
+
+def plot_median_factor_error(initial_errors, optimized_errors, key_frames, path=""):
+    plt.figure()
+    plt.plot(key_frames, initial_errors, label="Initial Error", color='orange')
+    plt.plot(key_frames, optimized_errors, label="Optimized Error", color='blue')
+    plt.xlabel("Bundle Starting at Frame Idx")
+    plt.ylabel("Median Factor Error")
+    plt.title("Median Factor Error Before and After Bundle Optimization")
+    plt.legend()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
+
 def plot_loop_between_two_frames(camera_positions, first, second, key_frames, path="plots/lc_"):
     plt.figure()
     plt.scatter(x=camera_positions[:, 0], y=camera_positions[:, 2], color='blue', label='our trajectory', s=0.75)

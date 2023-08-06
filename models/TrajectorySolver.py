@@ -272,6 +272,53 @@ class BundleAdjustment(TrajectorySolver):
     def get_final_estimated_trajectory(self):
         return self._final_estimated_trajectory
 
+    def get_mean_factor_error_graph(self, path="mean_factor_error_graph", suffix=""):
+        from utils.plotters import plot_mean_factor_error
+
+        # calculate data
+
+        initial_mean_factor_errors = []
+        optimized_mean_factor_errors = []
+        bundle_results = self.bundle_results[0]
+        for single_bundle_results in bundle_results:
+            i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = single_bundle_results
+            initial_total_graph_error = bundle_graph.error(initial_estimates)
+            optimized_total_graph_error = bundle_graph.error(optimized_estimates)
+            num_factors = bundle_graph.nrFactors()
+            initial_mean_factor_errors.append(initial_total_graph_error / num_factors)
+            optimized_mean_factor_errors.append(optimized_total_graph_error / num_factors)
+
+        # plot results
+
+        initial_mean_factor_errors = np.array(initial_mean_factor_errors)
+        optimized_mean_factor_errors = np.array(optimized_mean_factor_errors)
+        key_frames = self.key_frames[:-1]
+        plot_mean_factor_error(initial_mean_factor_errors, optimized_mean_factor_errors, key_frames, path=path+suffix)
+
+    def get_median_factor_error_graph(self, path="median_factor_error_graph", suffix=""):
+        from utils.plotters import plot_median_factor_error
+
+        # calculate data
+
+        initial_median_factor_errors = []
+        optimized_median_factor_errors = []
+        bundle_results = self.bundle_results[0]
+        for single_bundle_results in bundle_results:
+            i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = single_bundle_results
+            initial_factor_errors = np.array([bundle_graph.at(i).error(initial_estimates) for i in range(bundle_graph.nrFactors())])
+            optimized_factor_errors = np.array([bundle_graph.at(i).error(optimized_estimates) for i in range(bundle_graph.nrFactors())])
+            initial_median = np.median(initial_factor_errors)
+            optimized_median = np.median(optimized_factor_errors)
+            initial_median_factor_errors.append(initial_median)
+            optimized_median_factor_errors.append(optimized_median)
+
+        # plot results
+
+        initial_median_factor_errors = np.array(initial_median_factor_errors)
+        optimized_median_factor_errors = np.array(optimized_median_factor_errors)
+        key_frames = self.key_frames[:-1]
+        plot_median_factor_error(initial_median_factor_errors, optimized_median_factor_errors, key_frames, path=path+suffix)
+
 
 class LoopClosure(TrajectorySolver):
 
