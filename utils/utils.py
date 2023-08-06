@@ -276,8 +276,10 @@ def track_camera_for_many_images(thresh=1):
         assert are_supporters_boolean_array is not None, f"RANSAC Couldn't find a transformation from frame {frameId} to frame {frameId + 1}..."
         Rt_inliers = [point_to_choose for ind, point_to_choose in enumerate(matches_that_appear_in_all_4_images) if
                   are_supporters_boolean_array[ind]]
+        num_inliers = np.sum(are_supporters_boolean_array)
         track_db.update_tracks_from_frame(matcher, frameId, Rt_inliers)
         track_db.add_inliers_ratio(frameId, inliers_ratio)
+        track_db.add_num_matches(frameId, num_matches=num_inliers)
         R, t = Rt[:, :-1], Rt[:, -1]
         new_R = R @ extrinsic_matrices[frameId][:, :-1]
         new_t = R @ extrinsic_matrices[frameId][:, -1] + t

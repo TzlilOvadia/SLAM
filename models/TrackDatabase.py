@@ -25,6 +25,7 @@ class TrackDatabase:
         self._min_length = np.inf
         self._mean_frame_links = 0
         self._frame_id_to_inliers_ratio = {}
+        self._frame_id_to_num_matches = {}
         # I added these following attributes to be used in exercise 5:
         self.camera_positions = None
         self.ex_matrices = None
@@ -78,8 +79,15 @@ class TrackDatabase:
         assert frame_id in self._frame_ids
         self._frame_id_to_inliers_ratio[frame_id] = ratio
 
+    def add_num_matches(self, frame_id, num_matches):
+        assert frame_id in self._frame_ids
+        self._frame_id_to_num_matches[frame_id] = num_matches
+
     def get_inliers_ratio_per_frame(self):
         return self._frame_id_to_inliers_ratio
+
+    def get_num_matches_per_frame(self):
+        return self._frame_id_to_num_matches
 
     def get_track_ids_for_frame(self, frameId):
         """
@@ -124,6 +132,7 @@ class TrackDatabase:
             'frame_id_to_inliers_ratio': self._frame_id_to_inliers_ratio,
             'ex_camera_positions': self.camera_positions,
             'ex_matrices': self.ex_matrices,
+            'frame_id_to_num_matches': self._frame_id_to_num_matches
             # 'matcher_cache': self.matcher_cache
         }
         with open(file_path, 'wb') as f:
@@ -146,6 +155,8 @@ class TrackDatabase:
                 self._frame_id_to_inliers_ratio = data['frame_id_to_inliers_ratio']
                 self.camera_positions = data['ex_camera_positions']
                 self.ex_matrices = data['ex_matrices']
+                if 'frame_id_to_num_matches' in data:
+                    self._frame_id_to_num_matches = data['frame_id_to_num_matches']
 
             return Constants.SUCCESS
 

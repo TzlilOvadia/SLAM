@@ -146,6 +146,14 @@ class PNP(TrajectorySolver):
         plot_dict(inliers_ratio_dict, x_title='Frame Index', y_title='Inliers Ratio',
                   title='Inliers Ratio Per Frame Index', path=path + suffix)
 
+    def show_num_matches_graph(self, path="num_matches_graph", suffix=""):
+        from utils.plotters import plot_dict
+        track_db = self._track_db
+        print(f"Getting the Frame to Num Matches Data and Plotting it...")
+        num_matches_dict = track_db.get_num_matches_per_frame()
+        plot_dict(num_matches_dict, x_title='Frame Index', y_title='Num Matches',
+                  title='Num Matches Per Frame Index', path=path + suffix)
+
     def show_track_length_histogram(self, path="track_length_histogram", suffix=""):
         from utils.plotters import gen_hist
         track_db = self._track_db
