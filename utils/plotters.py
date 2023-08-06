@@ -234,6 +234,24 @@ def plot_trajectories(camera_positions, gt_camera_positions, points_3d=None, pat
     else:
         plt.show()
 
+
+def plot_multiple_angle_diffs(angle_diffs_PNP, angle_diffs_bundle_adjustment, angle_diffs_loop_closure,
+                              frames, key_frames, path="all_trajectories_angle_diffs", suffix=""):
+
+    plt.figure()
+    plt.plot(frames, angle_diffs_PNP, label='PNP trajectory')
+    plt.plot(key_frames, angle_diffs_bundle_adjustment, label='Bundle Adjustment trajectory')
+    plt.plot(key_frames, angle_diffs_loop_closure, label='Loop Closure trajectory')
+    plt.xlabel("frameId")
+    plt.ylabel("Angle Diff From GT Along Eigenvector (Radians)")
+    plt.title("Angle Diffs of Various Estimation Trajectories "+suffix)
+    plt.legend()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
+
 def plot_multiple_trajectories(camera_positions_PNP,camera_positions_bundle_adjustment, camera_positions_loop_closure,
                                gt_camera_positions, points_3d=None, path="all_trajectories_combined", suffix=""):
 

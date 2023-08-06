@@ -2,7 +2,7 @@ import random
 from models.Constants import SEED
 from models.TrackDatabase import TrackDatabase
 from models.TrajectorySolver import PNP, BundleAdjustment, LoopClosure
-from utils.plotters import plot_multiple_trajectories, plot_multiple_localization_error_over_time
+from utils.plotters import plot_multiple_trajectories, plot_multiple_localization_error_over_time, plot_multiple_angle_diffs
 from utils.utils import get_gt_trajectory
 
 if __name__ == "__main__":
