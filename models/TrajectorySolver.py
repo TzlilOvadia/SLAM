@@ -200,6 +200,43 @@ class PNP(TrajectorySolver):
         return reprojection_errors
 
 
+    def show_reprojection_error_per_distance(self, length, path="pnp_reprojection_error_per_distance", suffix="PNP"):
+        from utils.plotters import plot_median_projection_error_by_distance
+        from utils.utils import read_cameras, read_gt, least_squares, project_point_on_image
+        track_db = self._track_db
+        tracks = track_db.get_all_tracks_of_length(length=length)
+        k, m1, m2 = read_cameras()
+        lengths_to_errors = [[] for i in range(length)]
+        print(f"Calculating reprojection error per length {length} for PNP results...")
+        extrinsic_matrices = track_db.get_extrinsic_matrices()
+        for trackId, track_data in tracks:
+            # triangulating from last frame on track
+            track_point_feature_location, track_point_frameId = track_data[-1][1], track_data[-1][2]
+            p1 = track_point_feature_location[0], track_point_feature_location[2]
+            p2 = track_point_feature_location[1], track_point_feature_location[2]
+            Pmat = extrinsic_matrices[track_point_frameId]
+            Qmat = Pmat.copy()
+            Qmat[:, -1] = Qmat[:, -1] + m2[:, -1]
+            triangulated_3d_point = least_squares(p1, p2, k @ Pmat, k @ Qmat)
+
+            # reprojecting from last frame to first frames
+            for i, track_point in enumerate(track_data):
+                _, feature_location, frameId = track_data[i]
+                x_l, x_r, y = feature_location
+                tracked_feature_location_left = np.array([x_l, y])
+                current_left_extrinsic_matrix = extrinsic_matrices[frameId]
+                projected_point_on_left = project_point_on_image(triangulated_3d_point, current_left_extrinsic_matrix,
+                                                                 k)
+                # calculating reprojection error
+                reprojection_error_left = np.linalg.norm(tracked_feature_location_left - projected_point_on_left)
+                distance = len(track_data) - i - 1
+                lengths_to_errors[distance].append(reprojection_error_left)
+
+        lengths_to_mean_errors = np.array([np.median(np.array(lengths_to_errors[i])) for i in range(length)])
+        suffix = str(length) + "_" + suffix
+        plot_median_projection_error_by_distance(lengths_to_mean_errors, path=path+suffix, title_suffix=suffix)
+        return lengths_to_mean_errors
+
 
 
 class BundleAdjustment(TrajectorySolver):

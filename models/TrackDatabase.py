@@ -270,6 +270,10 @@ class TrackDatabase:
     def get_extrinsic_matrix_by_frameId(self, frameId):
         return self.ex_matrices[frameId]
 
+    def get_extrinsic_matrices(self):
+        return self.ex_matrices
+
+
     def get_trackIds(self):
         return self._tracks
 

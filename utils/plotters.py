@@ -34,6 +34,18 @@ def gen_hist(data, bins, title="", x="X", y="Y", path=""):
         plt.show()
 
 
+def plot_median_projection_error_by_distance(errors, path="", title_suffix=""):
+    plt.figure()
+    plt.plot(np.arange(len(errors)), errors, label="median error")
+    plt.xlabel("distance from reference frame")
+    plt.ylabel(f"median projection error")
+    plt.title(f"Median Projection Error for Tracks in Length {len(errors)} By Distance ({title_suffix})")
+    plt.legend()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
 def plot_mean_factor_error(initial_errors, optimized_errors, key_frames, path=""):
     plt.figure()
     plt.plot(key_frames, initial_errors, label="Initial Error", color='orange')
