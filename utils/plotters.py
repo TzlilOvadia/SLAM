@@ -150,7 +150,7 @@ def plot_trajectories(camera_positions, gt_camera_positions, points_3d=None, pat
         plt.show()
 
 def plot_multiple_trajectories(camera_positions_PNP,camera_positions_bundle_adjustment, camera_positions_loop_closure,
-                               gt_camera_positions, points_3d=None, path="", suffix=""):
+                               gt_camera_positions, points_3d=None, path="all_trajectories_combined", suffix=""):
 
     plt.figure()
     plt.scatter(x=camera_positions_PNP[:, 0], y=camera_positions_PNP[:, 2], color='red', label='PNP trajectory', s=0.5, alpha=.5)
@@ -166,7 +166,7 @@ def plot_multiple_trajectories(camera_positions_PNP,camera_positions_bundle_adju
     plt.title("Our Trajectory Vs Ground Truth Trajectory "+suffix)
     plt.legend()
     if path:
-        plt.savefig(path)
+        plt.savefig(f"plots/{path}")
     else:
         plt.show()
 

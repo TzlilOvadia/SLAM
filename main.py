@@ -33,4 +33,9 @@ if __name__ == "__main__":
     #loop_closure_solver.get_absolute_localization_error()
     # plot_multiple_trajectories(pnp_cam_pos, bundle_adjustment_cam_pos, loop_closure_cam_pos, get_gt_trajectory(),
     #                            path="plots/all_trajectories_comparison")
+    plot_multiple_trajectories(camera_positions_PNP=pnp_solver.get_final_estimated_trajectory(),
+                               camera_positions_bundle_adjustment=bundle_adjustment_solver.get_final_estimated_trajectory(),
+                               camera_positions_loop_closure=loop_closure_solver.get_final_estimated_trajectory(),
+                               gt_camera_positions=get_gt_trajectory(),
+                               suffix="")
     exit(0)
