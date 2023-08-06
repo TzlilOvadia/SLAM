@@ -84,7 +84,7 @@ def find_4_images_matches(consecutive_matches, prev_indices_mapping, cur_indices
             m = matches_list[0]
             prev_left_kp = m.queryIdx
             cur_left_kp = m.trainIdx
-            if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping:
+            if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping and prev_left_kp in ind_to_3d_point_prev:
 
                 xl, yl = matcher.get_feature_location_frame(reference_kf, kp=prev_left_kp, loc=LEFT)
                 xr, yr = matcher.get_feature_location_frame(reference_kf, kp=prev_indices_mapping[prev_left_kp], loc=RIGHT)

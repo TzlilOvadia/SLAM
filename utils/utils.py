@@ -27,6 +27,7 @@ def read_images(idx) -> (np.ndarray, np.ndarray):
     :param idx: An integer file index for the images to match.
     :return: None
     """
+    import cv2
     img_name = '{:06d}.png'.format(idx)
     _img1 = cv2.imread(DATA_PATH + f'image_0{SEP}' + img_name, 0)
     _img2 = cv2.imread(DATA_PATH + f'image_1{SEP}' + img_name, 0)
@@ -320,8 +321,8 @@ def get_3d_points_cloud(inlier_indices_mapping, k, m1, m2, matcher, file_index=0
         x1, y1 = kp1[ind_1].pt
         x2, y2 = kp2[ind_2].pt
         our_sol = least_squares((x1, y1), (x2, y2), k @ m1, k @ m2)
-        # if our_sol[-1] <= 0 or x1 < x2:
-        #     continue
+        if our_sol[-1] <= 0 or x1 < x2:
+            continue
 
         if abs(y1-y2)>2:
             print(f"y1-y2: {y1-y2} for y1: {y1}, y2:{y2}")
@@ -370,7 +371,7 @@ def get_matches_that_appear_in_all_4_images(consecutive_matches, prev_indices_ma
         m = matches_list[0]
         prev_left_kp = m.queryIdx
         cur_left_kp = m.trainIdx
-        if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping:
+        if prev_left_kp in prev_indices_mapping and cur_left_kp in cur_indices_mapping and prev_left_kp in ind_to_3d_point_prev:
             prev_left_ind = prev_left_kp
             assert prev_left_ind in ind_to_3d_point_prev, f"prev_left_ind={prev_left_ind} not in ind_to_3d_point_prev for some reason..."
             prev_left_ind = prev_left_kp
@@ -502,13 +503,14 @@ def project_point_on_image(point_3d, extrinsic_matrix, intrinsic_matrix):
 
 
 def visualize_track(track, num_to_show=10):
+    from utils.plotters import plot_regions_around_matching_pixels
     first_frames_of_track = track[:num_to_show]
     for i, track_point in enumerate(first_frames_of_track):
 
         _, feature_location, frameId = track_point
         x_l, x_r, y = feature_location
         left_image, right_image = read_images(frameId)
-        plot_regions_around_matching_pixels(left_image, right_image, x_l, y, x_r, y, frame_index=frameId, path=f"debug_track{frameId}")
+        plot_regions_around_matching_pixels(left_image, right_image, x_l, y, x_r, y, frame_index=frameId, path=f"plots/debug_track{frameId}")
 
 
 def get_gt_trajectory():

@@ -5,7 +5,6 @@ from matplotlib import pyplot as plt
 from models.Constants import *
 from models.TrackDatabase import TrackDatabase
 
-from utils.utils import read_images
 from utils.plotters import draw_matches
 # noinspection PyUnresolvedReferences
 FILTERED_MATCHES = "FILTERED_MATCHES"
@@ -43,6 +42,7 @@ class Matcher:
         :param idx: An integer file index for the images to match.
         :return: None
         """
+        from utils.utils import read_images
         self._file_index = idx
         self._img1, self._img2 = read_images(idx)
 

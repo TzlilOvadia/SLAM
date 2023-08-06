@@ -82,8 +82,8 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
     landmarks = set()
     # Compute the first frame's extrinsic matrix that maps points from camera coordinates to world coordinates
     first_cam_pose = track_db.get_extrinsic_matrix_by_frameId(bundle_starts_in_frame_id)
-    relevant_tracks = get_only_relevant_tracks(track_db, bundle_starts_in_frame_id)
-
+    #relevant_tracks = get_only_relevant_tracks(track_db, bundle_starts_in_frame_id)
+    relevant_tracks = get_only_relevant_tracks_all(track_db, bundle_starts_in_frame_id, bundle_ends_in_frame_id)
     frameId_to_cam_pose, factor_graph, initial_estimates = init_factor_graph_variables(track_db, bundle_ends_in_frame_id,
                                                                     bundle_starts_in_frame_id,
                                                                             first_cam_pose)
@@ -95,6 +95,9 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
         track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
         track_starts_in_frame_id = track_data[0][FRAME_ID]
         # if track_ends_in_frame_id < bundle_ends_in_frame_id or bundle_starts_in_frame_id < track_starts_in_frame_id:
+        track_length_in_bundle = min(track_ends_in_frame_id, bundle_ends_in_frame_id) - max(bundle_starts_in_frame_id, track_starts_in_frame_id) + 1
+        if track_length_in_bundle < 5:
+            continue
         # if track_ends_in_frame_id < bundle_ends_in_frame_id:
         #     continue
 
@@ -112,7 +115,18 @@ def create_factor_graph(track_db, bundle_starts_in_frame_id, bundle_ends_in_fram
 
         last_point3 = last_frame_pose.backproject(last_point2)
 
-        if last_point3[2] <= 0 or last_point3[2] >= 150:
+        # if last_point3[2] <= 0 or last_point3[2] >= 150:
+        #     continue
+
+        # find the z value from the first frame and filter by it ...
+        cam_pose_of_first_frame = frameId_to_cam_pose[frameId_of_first_frame_of_track_in_bundle]
+        first_frame_pose = gtsam.StereoCamera(cam_pose_of_first_frame, GTSAM_K)
+        index_of_first_relevant_track_point = frameId_of_first_frame_of_track_in_bundle - offset
+        first_loc = track_data[index_of_first_relevant_track_point][LOCATIONS_IDX]
+        first_point2 = gtsam.StereoPoint2(first_loc[0], first_loc[1], first_loc[2])
+        first_point3 = first_frame_pose.backproject(first_point2)
+
+        if first_point3[2] < 0 or first_point3[2] >= 100:
             continue
 
         point_symbol = gtsam.symbol(POINT, trackId)
@@ -188,6 +202,21 @@ def key_frames_by_percentile(frames, percentage, track_db):
 
     return key_frames
 
+def key_frames_by_elapsed_time(track_db, step):
+    frameIds = list(track_db.get_frameIds())
+    key_frames = [frameIds[i] for i in range(0, len(frameIds), step)]
+    if 15 > (frameIds[-1] - key_frames[-1]) > 5:
+        key_frames.append(frameIds[-1])
+    return key_frames
+
+
+def get_only_relevant_tracks_all(track_db, starting_frame_id, ending_frame_id):
+    tracksIds = set()
+    for frameId in range(starting_frame_id, ending_frame_id+1):
+        tracksIds.update(set(track_db.get_track_ids_for_frame(frameId)))
+    relevant_tracks = [(track_db.get_track_data(trackId), trackId) for trackId in tracksIds]
+
+    return relevant_tracks
 
 def get_only_relevant_tracks(track_db, frame_id):
     tracksIds = set()
@@ -349,7 +378,14 @@ def solve_one_bundle(track_db, bundle_window, debug=True):
     # Perform Bundle Adjustment Optimization
     optimizer = gtsam.LevenbergMarquardtOptimizer(bundle_graph, initial_estimates)
     optimized_estimates = optimizer.optimize()
-    bundle_covariance = gtsam.Marginals(bundle_graph, optimized_estimates)
+    try:
+        bundle_covariance = gtsam.Marginals(bundle_graph, optimized_estimates)
+    except RuntimeError as e:
+        print('\033[91m' + f"Caught Exception When Calculating Marginals: {e}" + '\033[0m')
+        bundle_starts_in_frame_id, bundle_ends_in_frame_id = bundle_window
+        bundle_graph, initial_estimates, landmarks = create_factor_graph(track_db, bundle_starts_in_frame_id,
+                                                                         bundle_ends_in_frame_id)
+        raise e
     # Print Total Factor Graph Error
     if debug:
         initial_error = bundle_graph.error(initial_estimates)
@@ -363,11 +399,11 @@ def solve_one_bundle(track_db, bundle_window, debug=True):
 
 ############################### Code Used for exercise 6 ###############################
 
-def load_bundle_results(path=None, force_recompute=False, debug=True):
+def load_bundle_results(path=PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS, force_recompute=False, debug=True, track_db_path=PATH_TO_SAVE_TRACKER_FILE):
     import pickle
     if force_recompute or path is None:
         print("Recomputing Bundle Adjustment ...")
-        return bundle_adjustment(path_to_serialize=path, debug=debug, plot_results=True)
+        return bundle_adjustment(path_to_serialize=path, debug=debug, plot_results=True, track_db_path=track_db_path)
     try:
         with open(path, 'rb') as f:
             bundle_adjustment_results = pickle.load(f)
@@ -380,7 +416,7 @@ def load_bundle_results(path=None, force_recompute=False, debug=True):
     except FileNotFoundError:
         print(f"No File Exists In {path}")
         print("Recomputing Bundle Adjustment ...")
-        return bundle_adjustment(path_to_serialize=path, debug=debug, plot_results=True)
+        return bundle_adjustment(path_to_serialize=path, debug=debug, plot_results=True, track_db_path=track_db_path)
     return bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, cond_matrices
 
 
@@ -447,7 +483,7 @@ def create_pose_graph(bundle_results, rel_poses_lst, optimized_global_keyframes_
     return pose_graph, initial_estimates, landmarks
 
 
-def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, track_db=None):
+def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, track_db=None, track_db_path=PATH_TO_SAVE_TRACKER_FILE):
     """
     This function solves bundle adjustment for many bundles independently, and calculates the resulting trajectory.
     :param path_to_serialize: path in which the bundle results will be saved at.
@@ -464,14 +500,15 @@ def bundle_adjustment(path_to_serialize=None, debug=False, plot_results=None, tr
     if track_db is None:
         track_db = TrackDatabase()
 
-    deserialization_result = track_db.deserialize(PATH_TO_SAVE_TRACKER_FILE)
+    deserialization_result = track_db.deserialize(track_db_path)
     if deserialization_result == FAILURE:
         _, track_db = utils.utils.track_camera_for_many_images()
-        track_db.serialize(PATH_TO_SAVE_TRACKER_FILE)
+        track_db.serialize(track_db_path)
         print("serialization is done!")
 
     frameIds = track_db.get_frameIds()
-    key_frames = key_frames_by_percentile(list(frameIds.keys()), .89, track_db)
+    #key_frames = key_frames_by_percentile(list(frameIds.keys()), .89, track_db)
+    key_frames = key_frames_by_elapsed_time(track_db, step=20)
     bundle_windows = get_bundle_windows(key_frames)
     prev = key_frames[0]
     for frame_id in key_frames[1:]:
