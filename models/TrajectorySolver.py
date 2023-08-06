@@ -43,6 +43,10 @@ class TrajectorySolver:
         angles_diff = get_rotation_matrices_distances(camera_estimated_poses[:, :, :-1], gt_rotations)
         return angles_diff
 
+    def get_angle_diff_between_given_rotations(self, rotation_1, rotation_2):
+        from utils.utils import get_rotation_matrices_distances
+        angles_diff = get_rotation_matrices_distances(rotation_1, rotation_2)
+        return angles_diff
 
     def get_xyz_diffs(self):
         camera_estimated_xyz_positions = self.get_final_estimated_trajectory()
@@ -243,8 +247,6 @@ class PNP(TrajectorySolver):
                  y="Track #", path=path+suffix)
         return reprojection_errors
 
-
-
     def show_reprojection_error_per_distance(self, length, path="pnp_reprojection_error_per_distance", suffix="PNP"):
         from utils.plotters import plot_median_projection_error_by_distance
         from utils.utils import read_cameras, read_gt, least_squares, project_point_on_image
@@ -282,7 +284,41 @@ class PNP(TrajectorySolver):
         plot_median_projection_error_by_distance(lengths_to_mean_errors, path=path+suffix, title_suffix=suffix)
         return lengths_to_mean_errors
 
+    def get_relative_estimation_error(self):
+        from utils.plotters import plot_relative_location_estimation_error, plot_relative_angle_estimation_error
+        from models.BundleAdjustment import get_relative_transformation_same_source_cs
+        estimated_global_poses = self.get_estimated_poses_matrices()
+        gt_global_poses = self.get_gt_poses()
+        gt_camera_positions = self.get_gt_trajectory()
+        gt_camera_positions_diffs = np.linalg.norm(gt_camera_positions[1:] - gt_camera_positions[:-1], axis=1)
+        sequence_lengths = [100, 300, 800]
+        relative_dist_estimations = []
+        relative_angle_estimations = []
+        for length in sequence_lengths:
+            estimated_relative_poses = np.array([get_relative_transformation_same_source_cs(estimated_global_poses[i + length],
+                                                                                            estimated_global_poses[i])
+                                                 for i in range(len(estimated_global_poses) - length)])
+            gt_relative_poses = np.array([get_relative_transformation_same_source_cs(gt_global_poses[i + length], gt_global_poses[i])
+                                          for i in range(len(gt_global_poses) - length)])
+            estimated_relative_locations = estimated_relative_poses[:, :, -1]
+            gt_relative_locations = gt_relative_poses[:, :, -1]
 
+            dist_denominator = np.array([np.sum(gt_camera_positions_diffs[i: i+length]) for i in range(len(estimated_global_poses) - length)])
+            dist_numerator = np.linalg.norm(estimated_relative_locations - gt_relative_locations, axis=1)
+            relative_dist_estimation = dist_numerator / dist_denominator
+            key_frames = self.key_frames[:-length]
+            mean_relative_dist_estimation = np.mean(relative_dist_estimation)
+            relative_dist_estimations.append((length, relative_dist_estimation, key_frames, mean_relative_dist_estimation))
+
+            estimated_relative_rotations = estimated_relative_poses[:, :, :-1]
+            gt_relative_rotations = gt_relative_poses[:, :, :-1]
+            angle_diffs = self.get_angle_diff_between_given_rotations(estimated_relative_rotations, gt_relative_rotations)
+            relative_angle_estimation = angle_diffs / dist_denominator
+            mean_relative_angle_estimation = np.mean(relative_angle_estimation)
+            relative_angle_estimations.append((length, relative_angle_estimation, key_frames, mean_relative_angle_estimation))
+        plot_relative_location_estimation_error(relative_dist_estimations,  mode="PNP", path="pnp_relative_location_error")
+        plot_relative_angle_estimation_error(relative_angle_estimations, mode="PNP", path="pnp_relative_angle_error")
+        a=5
 
 class BundleAdjustment(TrajectorySolver):
 

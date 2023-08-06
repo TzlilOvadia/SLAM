@@ -17,6 +17,7 @@ if __name__ == "__main__":
     #pnp_solver.get_absolute_estimation_error()
     #pnp_solver.show_reprojection_error_per_distance(length=20)
     pnp_solver.solve_trajectory()
+    pnp_solver.get_relative_estimation_error()
     # pnp_solver.get_absolute_localization_error()
     pnp_cam_pos = pnp_solver.get_final_estimated_trajectory()
     # pnp_solver.compare_trajectory_to_gt()

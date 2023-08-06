@@ -17,6 +17,36 @@ TOP_POV = 80
 SIDE_POV = -120
 
 
+def plot_relative_location_estimation_error(relative_dist_estimations, mode="", path=""):
+    import numpy as np
+    plt.figure()
+    for length, relative_dist_estimation, key_frames, mean_error in relative_dist_estimations:
+        plt.plot(key_frames, relative_dist_estimation, label=f"Seq length: {length} Mean Error: {np.round(mean_error, 5)}")
+    plt.xlabel("frame")
+    plt.ylabel("location error (meters)")
+    plt.title(f"Relative {mode} Estimation Location Error With Sequences Of...")
+    plt.legend()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
+
+def plot_relative_angle_estimation_error(relative_angle_estimations, mode="", path=""):
+    import numpy as np
+    plt.figure()
+    for length, relative_angle_estimation, key_frames, mean_error in relative_angle_estimations:
+        plt.plot(key_frames, relative_angle_estimation, label=f"Seq Length: {length} Mean Error: {np.round(mean_error, 5)}")
+    plt.xlabel("frame")
+    plt.ylabel("Angle error (radians)")
+    plt.title(f"Relative {mode} Estimation Angle Error With Sequences Of...")
+    plt.legend()
+    if path:
+        plt.savefig(f"plots/{path}")
+    else:
+        plt.show()
+
+
 def plot_absolute_xyz_location_diff(x_error, y_error, z_error, total_norm_error, key_frames, path="", mode=""):
     plt.figure()
     plt.plot(key_frames, x_error, label='X_error')
