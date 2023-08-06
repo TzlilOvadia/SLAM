@@ -13,7 +13,7 @@ if __name__ == "__main__":
     print("Python version:", sys.version)
     print("#################### Starting PNP segment ####################")
     pnp_solver = PNP(force_recompute=False)
-    pnp_solver.show_reprojection_error_for_tracks_at_given_length(length=10)
+    #pnp_solver.show_reprojection_error_for_tracks_at_given_length(length=10)
     pnp_solver.solve_trajectory()
     # pnp_solver.get_absolute_localization_error()
     pnp_cam_pos = pnp_solver.get_final_estimated_trajectory()
@@ -33,9 +33,10 @@ if __name__ == "__main__":
     #loop_closure_solver.get_absolute_localization_error()
     # plot_multiple_trajectories(pnp_cam_pos, bundle_adjustment_cam_pos, loop_closure_cam_pos, get_gt_trajectory(),
     #                            path="plots/all_trajectories_comparison")
-    plot_multiple_trajectories(camera_positions_PNP=pnp_solver.get_final_estimated_trajectory(),
+    key_frames = loop_closure_solver.key_frames
+    plot_multiple_trajectories(camera_positions_PNP=pnp_solver.get_final_estimated_trajectory()[key_frames],
                                camera_positions_bundle_adjustment=bundle_adjustment_solver.get_final_estimated_trajectory(),
                                camera_positions_loop_closure=loop_closure_solver.get_final_estimated_trajectory(),
-                               gt_camera_positions=get_gt_trajectory(),
+                               gt_camera_positions=get_gt_trajectory()[key_frames],
                                suffix="")
     exit(0)
