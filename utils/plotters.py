@@ -109,6 +109,47 @@ def gen_hist(data, bins, title="", x="X", y="Y", path=""):
         plt.show()
 
 
+def plot_all_median_projection_error_by_distance(initial_rep_errors, optimized_rep_errors,
+                                                 initial_fac_errors, optimized_fac_errors,
+                                                 path_suffix="", statistic_type="Median "):
+    xlabel = f"{statistic_type}distance from reference frame"
+    ylabel_error = "Error"
+    ylabel_rep = "Reprojection Error"
+    ylabel_fac = "Factor Error"
+    length = len(initial_fac_errors)
+
+    plt.figure()
+    plt.plot(np.arange(len(initial_rep_errors)), initial_rep_errors, label="PNP reprojection error")
+    plt.plot(np.arange(len(optimized_rep_errors)), optimized_rep_errors, label="BA reprojection error")
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel_rep)
+    plt.title(f"{statistic_type}Projection Error for Tracks in Length {length} By Distance")
+    plt.legend()
+    plt.savefig(f"plots/reprojection_error_by_distance{path_suffix}")
+
+    plt.figure()
+    plt.plot(np.arange(len(initial_fac_errors)), initial_fac_errors, label="PNP factor error")
+    plt.plot(np.arange(len(optimized_fac_errors)), optimized_fac_errors, label="BA factor error")
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel_fac)
+    plt.title(f"{statistic_type}Factor Error for Tracks in Length {length} By Distance")
+    plt.legend()
+    plt.savefig(f"plots/factor_error_by_distance{path_suffix}")
+
+    plt.figure()
+    plt.plot(np.arange(len(initial_fac_errors)), initial_fac_errors, label="PNP factor error")
+    plt.plot(np.arange(len(optimized_fac_errors)), optimized_fac_errors, label="BA factor error")
+    plt.plot(np.arange(len(initial_rep_errors)), initial_rep_errors, label="PNP reprojection error")
+    plt.plot(np.arange(len(optimized_rep_errors)), optimized_rep_errors, label="BA reprojection error")
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel_error)
+    plt.title(f"{statistic_type}Error for Tracks in Length {length} By Distance")
+    plt.legend()
+    plt.savefig(f"plots/combined_error_by_distance{path_suffix}")
+
+
+
+
 def plot_median_projection_error_by_distance(errors, path="", title_suffix=""):
     plt.figure()
     plt.plot(np.arange(len(errors)), errors, label="median error")

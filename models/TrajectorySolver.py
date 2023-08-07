@@ -32,14 +32,11 @@ class TrajectorySolver:
     def get_absolute_localization_error(self):
         raise NotImplementedError("Subclasses should implement this!")
 
-    def get_angle_diff(self, invert_gt_poses=False):
+    def get_angle_diff(self, invert_estimated_poses=False):
         from utils.utils import get_rotation_matrices_distances
         camera_gt_poses = self.get_gt_poses()
-        camera_estimated_poses = self.get_estimated_poses_matrices()
+        camera_estimated_poses = self.get_estimated_poses_matrices(invert_estimated_poses=invert_estimated_poses)
         gt_rotations = camera_gt_poses[:, :, :-1]
-        if invert_gt_poses:
-            ...
-            # gt_rotations = np.array([m.T for m in gt_rotations])
         angles_diff = get_rotation_matrices_distances(camera_estimated_poses[:, :, :-1], gt_rotations)
         return angles_diff
 
@@ -56,20 +53,20 @@ class TrajectorySolver:
         total_norm_error = np.linalg.norm(xyz_positions_diff, axis=1)
         return x_error, y_error, z_error, total_norm_error
 
-    def get_absolute_estimation_error(self, path, mode, invert_gt_poses=False):
+    def get_absolute_estimation_error(self, path, mode, invert_estimated_poses=False):
         from utils.plotters import plot_absolute_xyz_location_diff, plot_absolute_angle_diff_composition
         key_frames = self.key_frames
         x_error, y_error, z_error, total_norm_error = self.get_xyz_diffs()
-        angles_diff = self.get_angle_diff(invert_gt_poses)
+        angles_diff = self.get_angle_diff(invert_estimated_poses)
         plot_absolute_xyz_location_diff(x_error, y_error, z_error, total_norm_error, key_frames, path=path + "_location_", mode=mode)
         plot_absolute_angle_diff_composition(angles_diff, key_frames, path=path + "_angles_", mode=mode)
 
 
-    def get_relative_estimation_error(self, sequence_lengths=(100, 300, 800), mode="", path_suffix=""):
+    def get_relative_estimation_error(self, sequence_lengths=(100, 300, 500, 800), mode="", path_suffix="", invert_estimated_poses=False):
         from utils.plotters import plot_relative_location_estimation_error, plot_relative_angle_estimation_error
         from utils.utils import angle_between
         from models.BundleAdjustment import get_relative_transformation_same_source_cs
-        estimated_global_poses = self.get_estimated_poses_matrices()
+        estimated_global_poses = self.get_estimated_poses_matrices(invert_estimated_poses=invert_estimated_poses)
         gt_global_poses = self.get_gt_poses()
         estimated_camera_positions = self.get_final_estimated_trajectory()
         gt_camera_positions = self.get_gt_trajectory()
@@ -101,8 +98,8 @@ class TrajectorySolver:
             relative_dist_estimations.append((length, relative_dist_estimation, key_frames, mean_relative_dist_estimation))
 
 
-            angle_diffs = np.array([angle_between(estimated_relative_locations[i], gt_relative_locations[i])
-                                                  for i in range(len(estimated_relative_locations))])
+            # angle_diffs = np.array([angle_between(estimated_relative_locations[i], gt_relative_locations[i])
+            #                                       for i in range(len(estimated_relative_locations))])
 
             estimated_relative_rotations = estimated_relative_poses[:, :, :-1]
             gt_relative_rotations = gt_relative_poses[:, :, :-1]
@@ -123,7 +120,7 @@ class TrajectorySolver:
         from utils.utils import read_gt
         return read_gt()
 
-    def get_estimated_poses_matrices(self):
+    def get_estimated_poses_matrices(self, invert_estimated_poses=False):
         raise NotImplementedError("Subclasses should implement this!")
 
     def get_gt_trajectory(self):
@@ -206,7 +203,7 @@ class PNP(TrajectorySolver):
             _, self._track_db = track_camera_for_many_images()
             self._final_estimated_trajectory = self._track_db.camera_positions
 
-    def get_estimated_poses_matrices(self):
+    def get_estimated_poses_matrices(self, invert_estimated_poses=False):
         return self._track_db.get_extrinsic_matrices()
 
 
@@ -382,8 +379,12 @@ class BundleAdjustment(TrajectorySolver):
         from utils.utils import read_gt
         return read_gt()[self.key_frames]
 
-    def get_estimated_poses_matrices(self):
-        return get_poses_from_graph(self.optimized_estimates)
+    def get_estimated_poses_matrices(self, invert_estimated_poses=False):
+        from utils.utils import invert_Rt_transformation
+        poses = get_poses_from_graph(self.optimized_estimates)
+        if invert_estimated_poses:
+            poses = np.array([invert_Rt_transformation(Rt) for Rt in poses])
+        return poses
 
     def compare_trajectory_to_gt(self, path_suffix=""):
         gt_camera_positions = self._gt_trajectory
@@ -469,6 +470,92 @@ class BundleAdjustment(TrajectorySolver):
         key_frames = self.key_frames[:-1]
         plot_median_factor_error(initial_median_factor_errors, optimized_median_factor_errors, key_frames, path=path+suffix)
 
+    def show_factor_errors_and_reprojection_errors_by_distance(self, length, path_suffix=""):
+        from utils.plotters import plot_all_median_projection_error_by_distance
+        import gtsam
+        import utils
+        from models.BundleAdjustment import get_only_relevant_tracks_all
+        K, M1, M2 = utils.utils.read_cameras()
+        GTSAM_K = utils.utils.get_gtsam_calib_mat(K, M2)
+        track_db = self.get_track_db()
+        bundle_results = self.bundle_results[0]
+        dists_to_reprojection_errors_initial = [[] for i in range(length)]
+        dists_to_factor_errors_initial = [[] for i in range(length)]
+
+        dists_to_reprojection_errors_optimized = [[] for i in range(length)]
+        dists_to_factor_errors_optimized = [[] for i in range(length)]
+
+        for single_bundle_results in bundle_results:
+            i, bundle_window, bundle_graph, initial_estimates, landmarks, optimized_estimates = single_bundle_results
+            bundle_starts_in_frame_id, bundle_ends_in_frame_id = bundle_window
+            tracks = get_only_relevant_tracks_all(track_db, bundle_starts_in_frame_id, bundle_ends_in_frame_id)
+            for track_data, trackId in tracks:
+                point_symbol = gtsam.symbol(POINT, trackId)
+                track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
+                track_starts_in_frame_id = track_data[0][FRAME_ID]
+                track_length_in_bundle = min(track_ends_in_frame_id, bundle_ends_in_frame_id) - max(bundle_starts_in_frame_id, track_starts_in_frame_id) + 1
+                if point_symbol not in landmarks or track_length_in_bundle != length:
+                    continue
+                offset = track_data[0][FRAME_ID]
+                frameId_of_last_frame_of_track_in_bundle = min(bundle_ends_in_frame_id, track_ends_in_frame_id)
+                frameId_of_first_frame_of_track_in_bundle = max(bundle_starts_in_frame_id, track_starts_in_frame_id)
+                last_point3_initial = initial_estimates.atPoint3(point_symbol)
+                last_point3_optimized = initial_estimates.atPoint3(point_symbol)
+
+                for j, frame_id in enumerate(range(frameId_of_first_frame_of_track_in_bundle, frameId_of_last_frame_of_track_in_bundle + 1)):
+                    cam_symbol = gtsam.symbol(CAMERA, frame_id)
+                    index_of_relevant_track_point = frame_id - offset
+                    location = track_data[index_of_relevant_track_point][LOCATIONS_IDX]
+                    measured_point2 = gtsam.StereoPoint2(location[0], location[1], location[2])
+                    stereomodel_noise = gtsam.noiseModel.Isotropic.Sigma(3, 0.1)
+                    distance_from_reference_frame = frameId_of_last_frame_of_track_in_bundle - frame_id
+                    factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, cam_symbol, point_symbol,
+                                                         GTSAM_K)
+                    factor_error_initial = factor.error(initial_estimates)
+                    factor_error_optimized = factor.error(optimized_estimates)
+
+                    current_cam_pose_initial = initial_estimates.atPose3(cam_symbol)
+                    current_cam_pose_optimized = optimized_estimates.atPose3(cam_symbol)
+
+                    projected_point_initial = gtsam.StereoCamera(current_cam_pose_initial, GTSAM_K).project(last_point3_initial)
+                    projected_point_optimized = gtsam.StereoCamera(current_cam_pose_optimized, GTSAM_K).project(last_point3_optimized)
+
+                    reprojection_error_initial = np.linalg.norm(np.array([measured_point2.uL(), measured_point2.v()]) - np.array([projected_point_initial.uL(), projected_point_initial.v()]))
+                    reprojection_error_optimized = np.linalg.norm(np.array([measured_point2.uL(), measured_point2.v()]) - np.array([projected_point_optimized.uL(), projected_point_optimized.v()]))
+
+                    dists_to_reprojection_errors_initial[distance_from_reference_frame].append(reprojection_error_initial)
+                    dists_to_factor_errors_initial[distance_from_reference_frame].append(factor_error_initial)
+
+                    dists_to_reprojection_errors_optimized[distance_from_reference_frame].append(reprojection_error_optimized)
+                    dists_to_factor_errors_optimized[distance_from_reference_frame].append(factor_error_optimized)
+
+        dists_to_median_reprojection_error_initial = np.array([np.median(np.array(dists_to_reprojection_errors_initial[i])) for i in range(length)])
+        dists_to_median_factor_error_initial = np.array([np.median(np.array(dists_to_factor_errors_initial[i])) for i in range(length)])
+        dists_to_median_reprojection_error_optimized = np.array([np.median(np.array(dists_to_reprojection_errors_optimized[i])) for i in range(length)])
+        dists_to_median_factor_error_optimized = np.array([np.median(np.array(dists_to_factor_errors_optimized[i])) for i in range(length)])
+        suffix1 = str(length) + "_median" + path_suffix
+        plot_all_median_projection_error_by_distance(initial_rep_errors=dists_to_median_reprojection_error_initial,
+                                                     optimized_rep_errors=dists_to_median_reprojection_error_optimized,
+                                                     initial_fac_errors=dists_to_median_factor_error_initial,
+                                                     optimized_fac_errors=dists_to_median_factor_error_optimized,
+                                                     path_suffix=suffix1, statistic_type="Median ")
+
+        dists_to_mean_reprojection_error_initial = np.array([np.mean(np.array(dists_to_reprojection_errors_initial[i])) for i in range(length)])
+        dists_to_mean_factor_error_initial = np.array([np.mean(np.array(dists_to_factor_errors_initial[i])) for i in range(length)])
+        dists_to_mean_reprojection_error_optimized = np.array([np.mean(np.array(dists_to_reprojection_errors_optimized[i])) for i in range(length)])
+        dists_to_mean_factor_error_optimized = np.array([np.mean(np.array(dists_to_factor_errors_optimized[i])) for i in range(length)])
+        suffix2 = str(length) + "_mean" + path_suffix
+        plot_all_median_projection_error_by_distance(initial_rep_errors=dists_to_mean_reprojection_error_initial,
+                                                     optimized_rep_errors=dists_to_mean_reprojection_error_optimized,
+                                                     initial_fac_errors=dists_to_mean_factor_error_initial,
+                                                     optimized_fac_errors=dists_to_mean_factor_error_optimized,
+                                                     path_suffix=suffix2, statistic_type="Mean ")
+
+        return
+
+
+
+
 class LoopClosure(TrajectorySolver):
 
     def __init__(self,  path_to_save_track_db=PATH_TO_SAVE_TRACKER_FILE,
@@ -523,8 +610,12 @@ class LoopClosure(TrajectorySolver):
             self._gt_trajectory = get_gt_trajectory()[self.key_frames]
             self.serialize(self.path_to_save_lc)
 
-    def get_estimated_poses_matrices(self):
-        return get_poses_from_graph(self._cur_pose_graph_estimates)
+    def get_estimated_poses_matrices(self, invert_estimated_poses=False):
+        from utils.utils import invert_Rt_transformation
+        poses = get_poses_from_graph(self._cur_pose_graph_estimates)
+        if invert_estimated_poses:
+            poses = np.array([invert_Rt_transformation(Rt) for Rt in poses])
+        return poses
 
     def compare_trajectory_to_gt(self, path_suffix=""):
         gt_camera_positions =  self._gt_trajectory

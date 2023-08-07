@@ -324,8 +324,9 @@ def get_trajectory_from_graph(values):
 
 
 def get_poses_from_graph(values):
-    all_poses = gtsam.utilities.extractPose3(values).reshape(-1, 4, 3).transpose(0, 2, 1)
-    return all_poses
+    all_poses = gtsam.utilities.extractPose3(values).reshape(-1, 4, 3)
+    reshaped_poses = np.array([np.hstack((pose[:-1, :], pose[-1, :].reshape(-1, 1))) for pose in all_poses])
+    return reshaped_poses
 
 
 def plot_pg_uncertainty_before_and_after_lc(pose_graph_after, values_after):
