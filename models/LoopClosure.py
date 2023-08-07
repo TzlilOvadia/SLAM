@@ -123,20 +123,20 @@ def consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher
 
     consecutive_matches = matcher.match_between_any_frames(reference_kf, candidate_kf, thresh=thresh)
 
-    consensus_matches, tracks, filtered_matches = find_4_images_matches(consecutive_matches, prev_indices_mapping, cur_indices_mapping,
+    matches_on_all_images, tracks, filtered_matches = find_4_images_matches(consecutive_matches, prev_indices_mapping, cur_indices_mapping,
                                                       prev_ind_to_3d_point_dict, matcher, reference_kf, candidate_kf)
 
-    if len(consensus_matches) < 10:
-        return None, None, None, None, None
+    if len(matches_on_all_images) < 10:
+        return None, None, None, None, None, None
     kp1, kp2 = matcher.get_kp(idx=candidate_kf)
-    Rt, inliers_ratio, supporter_indices = utils.utils.ransac_for_pnp(consensus_matches, K, kp1, kp2, M2, thresh=2,
+    Rt, inliers_ratio, supporter_indices = utils.utils.ransac_for_pnp(matches_on_all_images, K, kp1, kp2, M2, thresh=2,
                                                                       debug=False, max_iterations=500, return_supporters=True)
 
     if Rt is None:
-        return None, None, None, None, None
+        return None, None, None, None, None, None
     filtered_tracks = [track for i, track in enumerate(tracks) if supporter_indices[i]]
 
-    return Rt, filtered_tracks, inliers_ratio, filtered_matches, supporter_indices
+    return Rt, filtered_tracks, inliers_ratio, filtered_matches, supporter_indices, len(matches_on_all_images)
 
 
 def create_trivial_factor_graph(reference_kf, candidate_kf, Rt, filtered_tracks):
@@ -219,6 +219,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
     cur_pose_graph_estimates = pose_graph_initial_estimates
     # we loop over all key frames, and find possible loop closures for them
     min_md, min_md_index = np.inf, None
+    lc_to_matches_statistics = {}
     good_ms = []
     successful_lc = []
     prev_num_of_successful_lc = 0
@@ -254,7 +255,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
         should_optimize = False
         for m_dist, candidate in best_candidates:
             candidate_kf = key_frames[candidate]
-            Rt, filtered_tracks, inliers_ratio, matches, supporting_indices = consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher)
+            Rt, filtered_tracks, inliers_ratio, matches, supporting_indices, num_matches = consensus_matching_of_general_two_frames(reference_kf, candidate_kf, matcher)
             if Rt is None:
                 print(f"didn't find good transformation between {i}th kf and {candidate}th kf")
                 continue
@@ -288,6 +289,7 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
                 edge_to_covariance[(candidate, reference_kf)] = conditional_covariance
                 successful_lc.append((m_dist, i, candidate))
                 print(f"Successfully appended kfs ({i}-{candidate}) as a loop closure!")
+                lc_to_matches_statistics[(i, candidate)] = (m_dist, num_matches, inliers_ratio)
                 should_optimize = True
 
         if should_optimize:
@@ -309,8 +311,9 @@ def loop_closure(pose_graph, key_frames, cond_matrices, pose_graph_initial_estim
     print(f"Overall, {len(successful_lc)} loop closures were detected.")
     worst_allowed_m_dist = np.percentile([lc[0] for lc in successful_lc], q=75)
     final_loop_closures = [(lc[1], lc[2]) for lc in successful_lc if lc[0] <= worst_allowed_m_dist]
+    lc_to_matches_statistics = {k:v for k, v in lc_to_matches_statistics.items() if k in final_loop_closures}
     print(f"From them, {len(final_loop_closures)} were kept, with a max mahalanobis distance of {worst_allowed_m_dist}")
-    return pose_graph, cur_pose_graph_estimates, final_loop_closures, good_ms
+    return pose_graph, cur_pose_graph_estimates, final_loop_closures, good_ms, lc_to_matches_statistics
 
 
 def get_inlier_ratio_threshold(distance, mahalanobis_threshold):

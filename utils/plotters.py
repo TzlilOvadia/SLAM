@@ -150,6 +150,21 @@ def plot_all_median_projection_error_by_distance(initial_rep_errors, optimized_r
     return
 
 
+def plot_lc_inlier_ratio_and_md(m_dists, num_matches, inlier_ratios, path_suffix=""):
+    plt.figure()
+    comment = "Numbers near points represent number of matches per loop closure"
+    plt.scatter(m_dists, inlier_ratios, label='inlier ratio with num matches')
+    plt.plot(m_dists, inlier_ratios)
+    for i, txt in enumerate(num_matches):
+        plt.annotate(txt, (m_dists[i], inlier_ratios[i]))
+    plt.xlabel("Mahalanobis Distance of Successful Loop Closure")
+    plt.ylabel("Inliers Ratio of This Loop Closure")
+    plt.title("Loop Closures Inliers Ratio vs Mahalanobis Distance")
+
+    plt.legend()
+    plt.savefig(f"plots/loop_closure_md_and_ir_{path_suffix}")
+
+    return
 
 
 def plot_median_projection_error_by_distance(errors, path="", title_suffix=""):

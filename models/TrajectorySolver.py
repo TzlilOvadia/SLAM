@@ -576,6 +576,7 @@ class LoopClosure(TrajectorySolver):
         self.global_3d_points = []
         self._good_mahalanobis_candidates = None
         self._initial_trajectory = None
+        self._lc_to_matches_statistics = None
         self.path_to_save_db = path_to_save_track_db
         self.path_to_save_ba = path_to_save_ba
         self.path_to_save_lc = path_to_save_lc
@@ -598,14 +599,15 @@ class LoopClosure(TrajectorySolver):
             kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
             cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
             self._initial_trajectory = self.get_trajectory_from_poses(optimized_global_keyframes_poses)
-            self._pose_graph, self._cur_pose_graph_estimates, self._successful_lc, good_ms = loop_closure(pose_graph, self.key_frames,
-                                                                                                          matcher=super().get_matcher(), cond_matrices=cond_matrices,
-                                                                                                          mahalanobis_thresh=MAHALANOBIS_THRESH,
-                                                                                                          pose_graph_initial_estimates=initial_estimates,
-                                                                                                          draw_supporting_matches_flag=False,
-                                                                                                          points_to_stop_by=False
-                                                                                                          )
+            self._pose_graph, self._cur_pose_graph_estimates, self._successful_lc, good_ms, lc_to_matches_statistics\
+                = loop_closure(pose_graph, self.key_frames,
+                               matcher=super().get_matcher(), cond_matrices=cond_matrices,
+                               mahalanobis_thresh=MAHALANOBIS_THRESH,
+                               pose_graph_initial_estimates=initial_estimates,
+                               draw_supporting_matches_flag=False,points_to_stop_by=False
+                               )
             self._good_mahalanobis_candidates = [(c[1], c[2]) for c in good_ms]
+            self._lc_to_matches_statistics = lc_to_matches_statistics
             self._final_estimated_trajectory = get_trajectory_from_graph(self._cur_pose_graph_estimates)
             self._gt_trajectory = get_gt_trajectory()[self.key_frames]
             self.serialize(self.path_to_save_lc)
@@ -659,6 +661,9 @@ class LoopClosure(TrajectorySolver):
         from utils.utils import read_gt
         return read_gt()[self.key_frames]
 
+    def get_lc_statistics(self):
+        return self._lc_to_matches_statistics
+
     def get_successful_lc(self):
         return self._successful_lc
 
@@ -679,6 +684,19 @@ class LoopClosure(TrajectorySolver):
             trajectory = self._final_estimated_trajectory if self._final_estimated_trajectory is not None else self._initial_trajectory
         plot_trajectory_with_loops(trajectory, given_loops, path=f"plots/lc_{suffix}_")
 
+
+    def show_num_matches_and_inliers_per_lc(self):
+        from utils.plotters import plot_lc_inlier_ratio_and_md
+        lc_stats_dict = self.get_lc_statistics()
+        lc_stats = list(lc_stats_dict.values())
+        lc_stats.sort(key=lambda e: e[0])
+        m_dists = np.array([lc_stat[0] for lc_stat in lc_stats])
+        num_matches = np.array([lc_stat[1] for lc_stat in lc_stats])
+        inlier_ratios = np.array([lc_stat[2] for lc_stat in lc_stats])
+        plot_lc_inlier_ratio_and_md(m_dists, num_matches, inlier_ratios, path_suffix="")
+        return
+
+
     def serialize(self, path=PATH_TO_SAVE_LOOP_CLOSURE_RESULTS):
         import pickle
         loop_closure_results_dict = {"initial_trajectory": self._initial_trajectory,
@@ -686,7 +704,8 @@ class LoopClosure(TrajectorySolver):
                                      "successful_lc": self._successful_lc,
                                      "final_trajectory": self._final_estimated_trajectory,
                                      "good_mahalanobis_candidates": self._good_mahalanobis_candidates,
-                                     "cur_pose_graph_estimates": self._cur_pose_graph_estimates}
+                                     "cur_pose_graph_estimates": self._cur_pose_graph_estimates,
+                                     "lc_to_matches_statistics": self._lc_to_matches_statistics}
         with open(path, 'wb') as f:
             pickle.dump(loop_closure_results_dict, f)
 
@@ -703,6 +722,8 @@ class LoopClosure(TrajectorySolver):
                 lc_solver._good_mahalanobis_candidates = loop_closure_results_dict["good_mahalanobis_candidates"]
                 lc_solver._cur_pose_graph_estimates = loop_closure_results_dict["cur_pose_graph_estimates"]
                 lc_solver._gt_trajectory = get_gt_trajectory()[lc_solver.key_frames]
+                if "lc_to_matches_statistics" in loop_closure_results_dict:
+                    lc_solver._lc_to_matches_statistics = loop_closure_results_dict["lc_to_matches_statistics"]
                 print(f"Found File At {path_to_deserialize}, loaded loop closure results...")
             return SUCCESS
         except Exception as e:
