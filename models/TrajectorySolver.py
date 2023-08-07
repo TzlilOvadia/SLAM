@@ -353,6 +353,7 @@ class BundleAdjustment(TrajectorySolver):
         self.path_to_save_db = path_to_save_track_db
         self.path_to_save_ba = path_to_save_ba
         self.optimized_estimates = None
+        self._pose_graph = None
 
     def solve_trajectory(self):
         self.bundle_results = load_bundle_results(path=self.path_to_save_ba, force_recompute=self.force_recompute, track_db_path=self.path_to_save_db)
@@ -361,7 +362,7 @@ class BundleAdjustment(TrajectorySolver):
         bundle_results, optimized_relative_keyframes_poses, optimized_global_keyframes_poses, bundle_windows, \
         cond_matrices = self.bundle_results
         key_frames = [window[0] for window in bundle_windows] + [bundle_windows[-1][1]]
-        _, self.optimized_estimates, _ = create_pose_graph(bundle_results,
+        self._pose_graph, self.optimized_estimates, _ = create_pose_graph(bundle_results,
                                                                     optimized_relative_keyframes_poses,
                                                                     optimized_global_keyframes_poses,
                                                                     cond_matrices)
@@ -369,6 +370,9 @@ class BundleAdjustment(TrajectorySolver):
         self._gt_trajectory = get_gt_trajectory()[key_frames]
         self.optimized_global_keyframes_poses = optimized_global_keyframes_poses
         a=5
+
+    def get_resulting_pose_graph_data(self):
+        return self._pose_graph, self.optimized_estimates
 
     def get_gt_trajectory(self):
         if self.key_frames is None:
@@ -553,9 +557,6 @@ class BundleAdjustment(TrajectorySolver):
 
         return
 
-
-
-
 class LoopClosure(TrajectorySolver):
 
     def __init__(self,  path_to_save_track_db=PATH_TO_SAVE_TRACKER_FILE,
@@ -565,9 +566,11 @@ class LoopClosure(TrajectorySolver):
         super().__init__(path_to_track_db=path_to_save_track_db)
         self._global_3d_points_numpy = None
         self._global_Rt_poses_in_numpy = None
-        self._pose_graph = None
+        self._optimized_pose_graph = None
+        self._initial_pose_graph = None
+        self._initial_pose_graph_estimates = None
         self._initial = None
-        self._cur_pose_graph_estimates = None
+        self._optimized_pose_graph_estimates = None
         self._successful_lc = None
         self.bundle_results = None
         self.optimized_global_keyframes_poses = []
@@ -596,10 +599,11 @@ class LoopClosure(TrajectorySolver):
                                                                          optimized_relative_keyframes_poses,
                                                                          optimized_global_keyframes_poses,
                                                                          cond_matrices)
-            kf_to_covariance = {self.key_frames[i + 1]: cond_matrices[i] for i in range(len(cond_matrices))}
-            cond_matrices = [cond_matrix * 10 for cond_matrix in cond_matrices]
+            self._initial_pose_graph = pose_graph.clone()
+            self._initial_pose_graph_estimates = initial_estimates
+            cond_matrices = [cond_matrix for cond_matrix in cond_matrices]
             self._initial_trajectory = self.get_trajectory_from_poses(optimized_global_keyframes_poses)
-            self._pose_graph, self._cur_pose_graph_estimates, self._successful_lc, good_ms, lc_to_matches_statistics\
+            self._optimized_pose_graph, self._optimized_pose_graph_estimates, self._successful_lc, good_ms, lc_to_matches_statistics\
                 = loop_closure(pose_graph, self.key_frames,
                                matcher=super().get_matcher(), cond_matrices=cond_matrices,
                                mahalanobis_thresh=MAHALANOBIS_THRESH,
@@ -608,13 +612,13 @@ class LoopClosure(TrajectorySolver):
                                )
             self._good_mahalanobis_candidates = [(c[1], c[2]) for c in good_ms]
             self._lc_to_matches_statistics = lc_to_matches_statistics
-            self._final_estimated_trajectory = get_trajectory_from_graph(self._cur_pose_graph_estimates)
+            self._final_estimated_trajectory = get_trajectory_from_graph(self._optimized_pose_graph_estimates)
             self._gt_trajectory = get_gt_trajectory()[self.key_frames]
             self.serialize(self.path_to_save_lc)
 
     def get_estimated_poses_matrices(self, invert_estimated_poses=False):
         from utils.utils import invert_Rt_transformation
-        poses = get_poses_from_graph(self._cur_pose_graph_estimates)
+        poses = get_poses_from_graph(self._optimized_pose_graph_estimates)
         if invert_estimated_poses:
             poses = np.array([invert_Rt_transformation(Rt) for Rt in poses])
         return poses
@@ -644,13 +648,75 @@ class LoopClosure(TrajectorySolver):
                                               path=PATH_TO_SAVE_LOCALIZATION_ERROR_LOOP_CLOSURE_AFTER + path_suffix,
                                               mode="Loop Closure")
 
-    def show_uncertainty(self):
-        try:
-            plot_pg_uncertainty_before_and_after_lc(self._pose_graph, self._cur_pose_graph_estimates)
-        except AttributeError as e:
-            print(f"{e}.\nRunning solve_trajectory...")
-            self.solve_trajectory()
-            plot_pg_uncertainty_before_and_after_lc(self._pose_graph, self._cur_pose_graph_estimates)
+    def show_uncertainty(self, path_suffix=""):
+        import gtsam
+        from utils.plotters import plot_uncertainty_over_time, plot_combined_uncertainty_over_time
+        key_frames = self.key_frames
+        pose_graph_after = self._optimized_pose_graph
+        estimates_after = self._optimized_pose_graph_estimates
+        pose_graph_before = self._initial_pose_graph
+        estimates_before = self._initial_pose_graph_estimates
+
+        optimizer = gtsam.LevenbergMarquardtOptimizer(pose_graph_before, estimates_before)
+        estimates_before = optimizer.optimize()
+
+        pose_graph_after_covariance = gtsam.Marginals(pose_graph_after, estimates_after)
+        pose_graph_before_covariance = gtsam.Marginals(pose_graph_before, estimates_before)
+        total_after = []
+        total_before = []
+        location_after = []
+        location_before = []
+        angle_after = []
+        angle_before = []
+        for kf in key_frames:
+            key_vectors = gtsam.KeyVector()
+            key_vectors.append(gtsam.symbol(CAMERA, kf))
+            total_kf_cov_after = pose_graph_after_covariance.jointMarginalCovariance(key_vectors).fullMatrix()
+            location_kf_cov_after = total_kf_cov_after[3:, 3:]
+            angle_kf_cov_after = total_kf_cov_after[:3, :3]
+
+            total_kf_cov_before = pose_graph_before_covariance.jointMarginalCovariance(key_vectors).fullMatrix()
+            location_kf_cov_before = total_kf_cov_before[3:, 3:]
+            angle_kf_cov_before = total_kf_cov_before[:3, :3]
+
+            total_after.append(total_kf_cov_after)
+            total_before.append(total_kf_cov_before)
+            location_after.append(location_kf_cov_after)
+            location_before.append(location_kf_cov_before)
+            angle_after.append(angle_kf_cov_after)
+            angle_before.append(angle_kf_cov_before)
+
+        total_after_score = [np.abs(np.linalg.det(cov)) for cov in total_after]
+        total_before_score = [np.abs(np.linalg.det(cov)) for cov in total_before]
+        location_after_score = [np.abs(np.linalg.det(cov)) for cov in location_after]
+        location_before_score = [np.abs(np.linalg.det(cov)) for cov in location_before]
+        angle_after_score = [np.abs(np.linalg.det(cov)) for cov in angle_after]
+        angle_before_score = [np.abs(np.linalg.det(cov)) for cov in angle_before]
+
+        frames_with_loops = self.get_frameIds_of_loop_closures()
+        plot_uncertainty_over_time(key_frames, total_after_score, "plots/LOOP_CLOSURE_uncertainty_" + path_suffix, title_suffix="(LOOP CLOSURE)", loop_closures_frames=frames_with_loops, kind="Total")
+        plot_uncertainty_over_time(key_frames, total_before_score, "plots/BUNDLE_ADJUSTMENT_uncertainty_" + path_suffix, title_suffix="(BUNDLE ADJUSTMENT)", kind="Total")
+
+        plot_uncertainty_over_time(key_frames, location_before_score, "plots/BUNDLE_ADJUSTMENT_uncertainty_location" + path_suffix, title_suffix="(BUNDLE ADJUSTMENT)", kind="Location")
+        plot_uncertainty_over_time(key_frames, angle_before_score, "plots/BUNDLE_ADJUSTMENT_uncertainty_angle" + path_suffix, title_suffix="(BUNDLE ADJUSTMENT)", kind="Angle")
+        plot_uncertainty_over_time(key_frames, location_after_score, "plots/LOOP_CLOSURE_uncertainty_location" + path_suffix, title_suffix="(LOOP_CLOSURE)", loop_closures_frames=frames_with_loops, kind="Location")
+        plot_uncertainty_over_time(key_frames, angle_after_score, "plots/LOOP_CLOSURE_uncertainty_angle" + path_suffix, title_suffix="(LOOP_CLOSURE)", loop_closures_frames=frames_with_loops, kind="Angle")
+
+
+        plot_combined_uncertainty_over_time(key_frames, np.log(total_before_score)+np.abs(np.min(np.log(total_before_score))),
+                                            np.log(total_after_score)+np.abs(np.min(np.log(total_before_score))),
+                                            "plots/log_combined_uncertainty_" + path_suffix,
+                                            title_suffix="(BA and LC- log)", loop_closures_frames=frames_with_loops)
+        return
+
+    def get_frameIds_of_loop_closures(self):
+        frameIds = set()
+        for a, b in self._successful_lc:
+            frameIds.add(self.key_frames[a])
+            frameIds.add(self.key_frames[b])
+        frameIds = list(frameIds)
+        frameIds.sort()
+        return frameIds
 
     def get_gt_trajectory(self):
         if self.key_frames is None:
@@ -684,7 +750,6 @@ class LoopClosure(TrajectorySolver):
             trajectory = self._final_estimated_trajectory if self._final_estimated_trajectory is not None else self._initial_trajectory
         plot_trajectory_with_loops(trajectory, given_loops, path=f"plots/lc_{suffix}_")
 
-
     def show_num_matches_and_inliers_per_lc(self):
         from utils.plotters import plot_lc_inlier_ratio_and_md
         lc_stats_dict = self.get_lc_statistics()
@@ -696,7 +761,6 @@ class LoopClosure(TrajectorySolver):
         plot_lc_inlier_ratio_and_md(m_dists, num_matches, inlier_ratios, path_suffix="")
         return
 
-
     def serialize(self, path=PATH_TO_SAVE_LOOP_CLOSURE_RESULTS):
         import pickle
         loop_closure_results_dict = {"initial_trajectory": self._initial_trajectory,
@@ -704,8 +768,11 @@ class LoopClosure(TrajectorySolver):
                                      "successful_lc": self._successful_lc,
                                      "final_trajectory": self._final_estimated_trajectory,
                                      "good_mahalanobis_candidates": self._good_mahalanobis_candidates,
-                                     "cur_pose_graph_estimates": self._cur_pose_graph_estimates,
-                                     "lc_to_matches_statistics": self._lc_to_matches_statistics}
+                                     "cur_pose_graph_estimates": self._optimized_pose_graph_estimates,
+                                     "lc_to_matches_statistics": self._lc_to_matches_statistics,
+                                     "initial_pose_graph": self._initial_pose_graph,
+                                     "optimized_pose_graph": self._optimized_pose_graph,
+                                     "initial_estimates": self._initial_pose_graph_estimates}
         with open(path, 'wb') as f:
             pickle.dump(loop_closure_results_dict, f)
 
@@ -720,10 +787,16 @@ class LoopClosure(TrajectorySolver):
                 lc_solver._successful_lc = loop_closure_results_dict["successful_lc"]
                 lc_solver._final_estimated_trajectory = loop_closure_results_dict["final_trajectory"]
                 lc_solver._good_mahalanobis_candidates = loop_closure_results_dict["good_mahalanobis_candidates"]
-                lc_solver._cur_pose_graph_estimates = loop_closure_results_dict["cur_pose_graph_estimates"]
+                lc_solver._optimized_pose_graph_estimates = loop_closure_results_dict["cur_pose_graph_estimates"]
                 lc_solver._gt_trajectory = get_gt_trajectory()[lc_solver.key_frames]
                 if "lc_to_matches_statistics" in loop_closure_results_dict:
                     lc_solver._lc_to_matches_statistics = loop_closure_results_dict["lc_to_matches_statistics"]
+                if "initial_pose_graph" in loop_closure_results_dict:
+                    lc_solver._initial_pose_graph = loop_closure_results_dict["initial_pose_graph"]
+                if "optimized_pose_graph" in loop_closure_results_dict:
+                    lc_solver._optimized_pose_graph = loop_closure_results_dict["optimized_pose_graph"]
+                if "initial_estimates" in loop_closure_results_dict:
+                    lc_solver._initial_pose_graph_estimates = loop_closure_results_dict["initial_estimates"]
                 print(f"Found File At {path_to_deserialize}, loaded loop closure results...")
             return SUCCESS
         except Exception as e:

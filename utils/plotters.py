@@ -249,16 +249,32 @@ def plot_trajectory_with_loops(camera_positions, loop_closures, path="plots/"):
     plt.savefig(path + f"traj_with_all_loop_closures")
 
 
-def plot_uncertainty_over_time(keyframes, uncertainty_score, path="", suffix=""):
+def plot_uncertainty_over_time(keyframes, uncertainty_score, path="", title_suffix="", loop_closures_frames=None, kind="Total"):
     plt.figure()
-    plt.plot(keyframes, uncertainty_score)
+    plt.plot(keyframes, uncertainty_score, label="uncertainty score")
     plt.xlabel("KeyFrame Index")
     plt.ylabel("uncertainty score per frame")
-    plt.title("uncertainty score per frame " + suffix)
+    plt.title(f"{kind} uncertainty score per frame " + title_suffix)
+    if loop_closures_frames is not None:
+        plt.scatter(loop_closures_frames, np.zeros_like(loop_closures_frames), label="Loop Closure Location")
+    plt.legend()
     if path:
         plt.savefig(path)
     else:
         plt.show()
+
+def plot_combined_uncertainty_over_time(keyframes, uncertainty_score_bundle, uncertainty_score_loops, path="", title_suffix="", loop_closures_frames=None):
+    plt.figure()
+    plt.plot(keyframes, uncertainty_score_bundle, label="uncertainty score BA")
+    plt.plot(keyframes, uncertainty_score_loops, label="uncertainty score LC")
+    plt.xlabel("KeyFrame Index")
+    plt.ylabel("uncertainty score per frame")
+    plt.title("uncertainty score per frame " + title_suffix)
+    if loop_closures_frames is not None:
+        plt.scatter(loop_closures_frames, np.zeros_like(loop_closures_frames), label="Loop Closure Location")
+    plt.legend()
+    if path:
+        plt.savefig(path)
 
 
 def plot_localization_error_over_time(keyframes, camera_positions, gt_camera_positions, path="", mode=""):
