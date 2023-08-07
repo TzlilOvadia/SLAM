@@ -1,8 +1,9 @@
+import gtsam
 import numpy as np
 from models.Constants import *
 from models.Matcher import Matcher
 from models.TrackDatabase import TrackDatabase
-from models.BundleAdjustment import bundle_adjustment, create_pose_graph, load_bundle_results, get_translation_rotation_diff
+from models.BundleAdjustment import *
 from utils.utils import track_camera_for_many_images, get_gt_trajectory
 from utils.plotters import plot_trajectories, plot_localization_error_over_time
 from models.LoopClosure import loop_closure, plot_pg_locations_before_and_after_lc,\
@@ -371,7 +372,72 @@ class BundleAdjustment(TrajectorySolver):
         self._final_estimated_trajectory = get_trajectory_from_graph(self.optimized_estimates)
         self._gt_trajectory = get_gt_trajectory()[key_frames]
         self.optimized_global_keyframes_poses = optimized_global_keyframes_poses
-        a=5
+
+
+        factor_errors, optimized_factor_erros, reprojection_errors, optimized_reprojection_errors = [], [], [], []
+        for i in range(len(key_frames) - 1):
+            bundle_window = self.bundle_results[-2][i]
+            optimized_estimates = self.bundle_results[0][i][-1]
+            initial_estimates = self.bundle_results[0][i][3]
+            results_init, results_optimized, rep_results_init, rep_results_optimized = get_factors_data(self._track_db, initial_estimates, optimized_estimates,
+                                                               bundle_window, 15)
+            factor_errors.extend(results_init), optimized_factor_erros.extend(results_optimized)
+            reprojection_errors.extend(rep_results_init), optimized_reprojection_errors.extend(rep_results_optimized)
+
+        # res = np.array(res)
+        optimized_factor_erros = np.array(optimized_factor_erros)
+        factor_errors = np.array(factor_errors)
+        optimized_reprojection_errors = np.array(optimized_reprojection_errors)
+        reprojection_errors = np.array(reprojection_errors)
+
+        # Means
+        mean_optimized_reprojection_errors = np.mean(optimized_reprojection_errors, axis=0)
+        plt.plot(mean_optimized_reprojection_errors)
+        plt.title("Mean reprojection error after optimization")
+        plt.xlabel("Distance from reference frame")
+        plt.ylabel("Reprojection Error")
+        plt.show()
+
+        mean_reprojection_errors = np.mean(reprojection_errors, axis=0)
+        plt.plot(mean_reprojection_errors)
+        plt.title("Mean reprojection error before optimization")
+        plt.xlabel("Distance from reference frame")
+        plt.ylabel("Reprojection Error")
+        plt.show()
+
+
+        mean_factor_errs_opt = np.mean(optimized_factor_erros, axis=0)
+        mean_factor_errs_init = np.mean(factor_errors, axis=0)
+        plt.plot(mean_factor_errs_init)
+        plt.title("Mean factor error before optimization")
+        plt.xlabel("Distance from reference frame")
+        plt.ylabel("Factor Error")
+        plt.show()
+
+        plt.plot(mean_factor_errs_opt)
+        plt.title("Mean factor error after optimization")
+        plt.xlabel("Distance from reference frame")
+        plt.ylabel("Factor Error")
+        plt.show()
+
+        # Medians
+
+        median_factor_errs_opt = np.median(optimized_factor_erros, axis=0)
+        median_factor_errs_init = np.median(factor_errors, axis=0)
+
+        plt.plot(median_factor_errs_init)
+        plt.title("Median factor error after optimization")
+        plt.xlabel("Distance from reference frame")
+        plt.ylabel("Factor Error")
+        plt.show()
+
+        plt.plot(median_factor_errs_opt)
+        plt.title("Median factor error after optimization")
+        plt.xlabel("Distance from reference frame")
+        plt.ylabel("Factor Error")
+        plt.show()
+
+
 
     def get_gt_trajectory(self):
         if self.key_frames is None:
@@ -523,6 +589,7 @@ class LoopClosure(TrajectorySolver):
             self._gt_trajectory = get_gt_trajectory()[self.key_frames]
             self.serialize(self.path_to_save_lc)
 
+
     def get_estimated_poses_matrices(self):
         return get_poses_from_graph(self._cur_pose_graph_estimates)
 
@@ -617,3 +684,162 @@ class LoopClosure(TrajectorySolver):
         except Exception as e:
             print('\033[91m' + f"Caught Exception When loading lc results: {e}" + '\033[0m')
             return FAILURE
+
+
+def get_factors_data(track_db: TrackDatabase, initial_estimates:gtsam.Values, optimized_estimates: gtsam.Values, bundle_window, length=15):
+    bundle_starts_in_frame_id, bundle_ends_in_frame_id = bundle_window
+    first_cam_pose = track_db.get_extrinsic_matrix_by_frameId(bundle_starts_in_frame_id)
+    frameId_to_cam_pose, factor_graph, _ = init_factor_graph_variables(track_db, bundle_ends_in_frame_id,
+                                                                       bundle_starts_in_frame_id,
+                                                                       first_cam_pose)
+    tracks = get_only_relevant_tracks_all(track_db, bundle_starts_in_frame_id, bundle_ends_in_frame_id)
+
+    # Fetch all the needed poses for the given bundle window and create a Stereo Camera element accordingly, for both
+    # The initial estimates and the optimized estimates:
+    cam_poses_in_bundles = [initial_estimates.atPose3(gtsam.symbol(CAMERA, frameId)) for frameId in range(bundle_starts_in_frame_id, bundle_ends_in_frame_id+1)]
+    stereo_cam_in_bundles = [gtsam.StereoCamera(pose, GTSAM_K) for pose in cam_poses_in_bundles]
+
+    cam_poses_in_bundles_optimized = [optimized_estimates.atPose3(gtsam.symbol(CAMERA, frameId)) for frameId in range(bundle_starts_in_frame_id, bundle_ends_in_frame_id+1)]
+    stereo_cams_in_bundles_optimized = [gtsam.StereoCamera(pose, GTSAM_K) for pose in cam_poses_in_bundles_optimized]
+
+    # Preparing the arrays for the all the errors results to be saved.
+    factor_errors_result_optimized = []
+    reprojection_errors_result_optimized = []
+
+    factor_errors_result = []
+    reprojection_errors_result = []
+
+    for track_data, trackId in tracks:
+        # For each track we'll create a vector where the i'th element in every vector represents the relevant error for
+        # in a distance of i frames from the reference frame.
+        init_factor_err = np.zeros((length,))
+        optimized_factor_err = np.zeros((length,))
+        init_repr_err = np.zeros((length,))
+        optimized_repr_err = np.zeros((length,))
+
+        # Code as in create_factor_graph original implementation (except the constraint on the length of each track)
+        track_ends_in_frame_id = track_data[LAST_ITEM][FRAME_ID]
+        track_starts_in_frame_id = track_data[0][FRAME_ID]
+
+        track_length_in_bundle = min(track_ends_in_frame_id, bundle_ends_in_frame_id) - max(
+            bundle_starts_in_frame_id,
+            track_starts_in_frame_id) + 1
+        if track_length_in_bundle != length:
+            continue
+
+        # TODO original code uses a 2d point coordinates from last frame of track, but uses the cam_pose of the last frame in the bundle... wrong
+        # Create measurement factor for this track point
+        offset = track_data[0][FRAME_ID]
+        frameId_of_last_frame_of_track_in_bundle = min(bundle_ends_in_frame_id, track_ends_in_frame_id)
+        frameId_of_first_frame_of_track_in_bundle = max(bundle_starts_in_frame_id, track_starts_in_frame_id)
+        cam_pose_of_last_frame = frameId_to_cam_pose[frameId_of_last_frame_of_track_in_bundle]
+        last_frame_pose = gtsam.StereoCamera(cam_pose_of_last_frame, GTSAM_K)
+        index_of_last_relevant_track_point = frameId_of_last_frame_of_track_in_bundle - offset
+        last_loc = track_data[index_of_last_relevant_track_point][LOCATIONS_IDX]
+        # Get the 2D point in the last frame for triangulation
+        last_point2 = gtsam.StereoPoint2(last_loc[0], last_loc[1], last_loc[2])
+
+        last_point3 = last_frame_pose.backproject(last_point2)
+
+        # find the z value from the first frame and filter by it ...
+        cam_pose_of_first_frame = frameId_to_cam_pose[frameId_of_first_frame_of_track_in_bundle]
+        first_frame_pose = gtsam.StereoCamera(cam_pose_of_first_frame, GTSAM_K)
+        index_of_first_relevant_track_point = frameId_of_first_frame_of_track_in_bundle - offset
+        first_loc = track_data[index_of_first_relevant_track_point][LOCATIONS_IDX]
+        first_point2 = gtsam.StereoPoint2(first_loc[0], first_loc[1], first_loc[2])
+        first_point3 = first_frame_pose.backproject(first_point2)
+
+        if first_point3[2] < 0 or first_point3[2] >= 100:
+            continue
+
+
+        point_symbol = gtsam.symbol(POINT, trackId)
+
+        for i, frame_id in enumerate(range(frameId_of_first_frame_of_track_in_bundle, frameId_of_last_frame_of_track_in_bundle + 1)):
+            # Here we create a factor to be used for calculations of the factor error according to the given estimates
+            # values
+            factor, location = generate_factor(frame_id, offset, point_symbol, track_data)
+            distance_from_reference_frame = frameId_of_last_frame_of_track_in_bundle - frame_id
+
+            # Calculating the different factor errors
+            opt_f = factor.error(optimized_estimates)
+            init_f = factor.error(initial_estimates)
+
+            # take the different stereo cameras:
+            cur_st_cam = stereo_cam_in_bundles[i]
+            cur_st_cam_optimized = stereo_cams_in_bundles_optimized[i]
+            # reproject the last point on the reference frame on each camera
+            reprojected_point = cur_st_cam.project(last_point3)
+
+            # Calculate the error w.r.t each camera
+            error = np.linalg.norm(
+                np.array(last_point3) - np.array(
+                    [reprojected_point.uL(), reprojected_point.uR(), reprojected_point.v()]))
+            reprojected_point_opt = cur_st_cam_optimized.project(last_point3)
+            error_opt = np.linalg.norm(
+                np.array(last_point3) - np.array(
+                    [reprojected_point_opt.uL(), reprojected_point_opt.uR(), reprojected_point_opt.v()]))
+
+
+
+            try:
+                optimized_factor_err[distance_from_reference_frame] = opt_f
+                init_factor_err[distance_from_reference_frame] = init_f
+                optimized_repr_err[distance_from_reference_frame]=error_opt
+                init_repr_err[distance_from_reference_frame]=error
+            except IndexError as e:
+                print(e)
+                # If got into here, you should probably re-run the bundle adjustment from the beginning...
+                return None
+        if len(init_repr_err):
+            factor_errors_result.append(np.array(init_factor_err))
+            factor_errors_result_optimized.append(np.array(optimized_factor_err))
+            reprojection_errors_result.append(init_repr_err)
+            reprojection_errors_result_optimized.append(optimized_repr_err)
+
+    return factor_errors_result, factor_errors_result_optimized, reprojection_errors_result, reprojection_errors_result_optimized
+
+
+def generate_factor(frame_id, offset, point_symbol, track_data):
+    cam_symbol = gtsam.symbol(CAMERA, frame_id)
+    index_of_relevant_track_point = frame_id - offset
+    location = track_data[index_of_relevant_track_point][LOCATIONS_IDX]
+    # Get the measured 2D point in the current frame
+    measured_point2 = gtsam.StereoPoint2(location[0], location[1], location[2])
+    # Create the factor between the measured and projected points
+    stereomodel_noise = gtsam.noiseModel.Isotropic.Sigma(3, 0.1)
+    factor = gtsam.GenericStereoFactor3D(measured_point2, stereomodel_noise, cam_symbol, point_symbol,
+                                         GTSAM_K)
+    return factor, location
+
+
+def triangulate_and_project_on_reference(track,track_db, estimates:gtsam.Values):
+    """
+    Triangulate a 3D point from the last frame of the track
+    and project it to all frames in the track.
+    Return the reprojection errors and factors.
+    """
+
+    frameIds = [track_feature[FRAME_ID] for track_feature in track]
+    points = [track_feature[LOCATIONS_IDX] for track_feature in track]
+    x_l_last, x_r_last, y_last = points[-1]
+    values = gtsam.Values()
+
+    # Create a StereoCamera for each frame in the track
+    stereo_cameras = get_stereoCam_per_frame(frameIds,track_db)
+
+    # Triangulate 3D point in global coordinates from the last frame
+    image_point = gtsam.StereoPoint2(x_l_last, x_r_last, y_last)  # (x_left, x_right, y) Image point in the last frame
+    stereo_camera_last = stereo_cameras[-1]
+    triangulated_point = stereo_camera_last.backproject(image_point)
+
+    # Project the 3D point to all frames in the track
+    reprojected_points = reproject_points_to_last(frameIds, stereo_cameras, triangulated_point)
+
+    p_sym = gtsam.symbol(POINT, 0)
+    values.insert(p_sym, triangulated_point)
+    # Calculate and plot the re-projection error size over the track's images
+    factors, reprojection_errors, values = compute_reprojection_errors(frameIds, points, reprojected_points,
+                                                                       stereo_cameras, values, p_sym)
+
+    return reprojection_errors, factors, values
