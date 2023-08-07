@@ -147,6 +147,8 @@ def plot_all_median_projection_error_by_distance(initial_rep_errors, optimized_r
     plt.legend()
     plt.savefig(f"plots/combined_error_by_distance{path_suffix}")
 
+    return
+
 
 
 
