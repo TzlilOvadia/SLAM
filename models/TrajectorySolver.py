@@ -136,10 +136,10 @@ class TrajectorySolver:
         Method to load the tracks to the database.
         """
         self.deserialization_result = self._track_db.deserialize(path)
-
         if self.deserialization_result == FAILURE:
             self._final_estimated_trajectory, self._track_db = track_camera_for_many_images()
             self._track_db.serialize(path)
+            self.deserialization_result = SUCCESS
 
     def get_track_db(self):
         """
