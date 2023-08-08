@@ -234,14 +234,14 @@ class PNP(TrajectorySolver):
         # Display Mean Number of Frame Links
         print(f"Mean Number of Frame Links (number of tracks on an average image): {track_db.get_mean_frame_links()}")
 
-    def show_connectivity_graph(self, path="connectivity_graph", suffix=""):
+    def show_connectivity_graph(self, path="pnp_connectivity_graph", suffix=""):
         from utils.plotters import plot_connectivity_graph
         track_db = self._track_db
         print("Calculating Connectivity Graph and Plotting it...")
         frame_nums, outgoint_tracks_in_frame = track_db.calculate_connectivity_data()
         plot_connectivity_graph(frame_nums, outgoint_tracks_in_frame, path=path + suffix)
 
-    def show_inliers_ratio_graph(self, path="inliers_ratio_graph", suffix=""):
+    def show_inliers_ratio_graph(self, path="pnp_inliers_ratio_graph", suffix=""):
         from utils.plotters import plot_dict
         track_db = self._track_db
         print(f"Getting the Frame to Inliers Ratio Data and Plotting it...")
@@ -249,7 +249,7 @@ class PNP(TrajectorySolver):
         plot_dict(inliers_ratio_dict, x_title='Frame Index', y_title='Inliers Ratio',
                   title='Inliers Ratio Per Frame Index', path=path + suffix)
 
-    def show_num_matches_graph(self, path="num_matches_graph", suffix=""):
+    def show_num_matches_graph(self, path="pnp_num_matches_graph", suffix=""):
         from utils.plotters import plot_dict
         track_db = self._track_db
         print(f"Getting the Frame to Num Matches Data and Plotting it...")
@@ -257,7 +257,7 @@ class PNP(TrajectorySolver):
         plot_dict(num_matches_dict, x_title='Frame Index', y_title='Num Matches',
                   title='Num Matches Per Frame Index', path=path + suffix)
 
-    def show_track_length_histogram(self, path="track_length_histogram", suffix=""):
+    def show_track_length_histogram(self, path="pnp_track_length_histogram", suffix=""):
         from utils.plotters import gen_hist
         track_db = self._track_db
         print(f"Getting the Track Length Data and Plotting it...")
@@ -742,15 +742,15 @@ class LoopClosure(TrajectorySolver):
         from utils.plotters import plot_trajectory_with_loops
         if trajectory is None:
             trajectory = self._final_estimated_trajectory if self._final_estimated_trajectory is not None else self._initial_trajectory
-        plot_trajectory_with_loops(trajectory, self._successful_lc, path=f"plots/lc_{suffix}_")
+        plot_trajectory_with_loops(trajectory, self._successful_lc, path_suffix=suffix)
 
     def show_given_loops_on_trajectory(self, given_loops, trajectory=None, suffix="given_loops"):
         from utils.plotters import plot_trajectory_with_loops
         if trajectory is None:
             trajectory = self._final_estimated_trajectory if self._final_estimated_trajectory is not None else self._initial_trajectory
-        plot_trajectory_with_loops(trajectory, given_loops, path=f"plots/lc_{suffix}_")
+        plot_trajectory_with_loops(trajectory, given_loops, path_suffix=suffix)
 
-    def show_num_matches_and_inliers_per_lc(self):
+    def show_num_matches_and_inliers_per_lc(self, path_suffix=""):
         from utils.plotters import plot_lc_inlier_ratio_and_md
         lc_stats_dict = self.get_lc_statistics()
         lc_stats = list(lc_stats_dict.values())
@@ -758,7 +758,7 @@ class LoopClosure(TrajectorySolver):
         m_dists = np.array([lc_stat[0] for lc_stat in lc_stats])
         num_matches = np.array([lc_stat[1] for lc_stat in lc_stats])
         inlier_ratios = np.array([lc_stat[2] for lc_stat in lc_stats])
-        plot_lc_inlier_ratio_and_md(m_dists, num_matches, inlier_ratios, path_suffix="")
+        plot_lc_inlier_ratio_and_md(m_dists, num_matches, inlier_ratios, path_suffix=path_suffix)
         return
 
     def serialize(self, path=PATH_TO_SAVE_LOOP_CLOSURE_RESULTS):

@@ -232,7 +232,7 @@ def draw_matching_images(first, second, key_frames, path="lc_compare_images"):
     plt.savefig(f"plots/{path}_{first}_{second}")
 
 
-def plot_trajectory_with_loops(camera_positions, loop_closures, path="plots/"):
+def plot_trajectory_with_loops(camera_positions, loop_closures, path="traj_with_all_loop_closures_", path_suffix=""):
     firsts = [lc[0] for lc in loop_closures]
     seconds = [lc[1] for lc in loop_closures]
     plt.figure()
@@ -246,7 +246,7 @@ def plot_trajectory_with_loops(camera_positions, loop_closures, path="plots/"):
     plt.ylabel("Z")
     plt.title(f"our trajectory with all loop closures")
     plt.legend()
-    plt.savefig(path + f"traj_with_all_loop_closures")
+    plt.savefig(f"plots/{path}" + path_suffix)
 
 
 def plot_uncertainty_over_time(keyframes, uncertainty_score, path="", title_suffix="", loop_closures_frames=None, kind="Total"):
