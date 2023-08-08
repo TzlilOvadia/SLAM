@@ -10,7 +10,7 @@ if __name__ == "__main__":
     track_db = TrackDatabase()
     import sys
     print("Python version:", sys.version)
-    running_ver = "ver0"
+    running_ver = "ver1"
     print("#################### Starting PNP segment ####################")
     pnp_solver = PNP(force_recompute=False)
     pnp_solver.solve_trajectory()

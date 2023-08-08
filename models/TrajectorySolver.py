@@ -21,11 +21,6 @@ class TrajectorySolver:
         self._gt_trajectory = self.get_gt_trajectory()
         self._predicted_trajectory = None
 
-
-
-    def get_rotation_error(self):
-        raise NotImplementedError("Subclasses should implement this!")
-
     def solve_trajectory(self):
         raise NotImplementedError("Subclasses should implement this!")
 
@@ -38,6 +33,7 @@ class TrajectorySolver:
         camera_estimated_poses = self.get_estimated_poses_matrices(invert_estimated_poses=invert_estimated_poses)
         gt_rotations = camera_gt_poses[:, :, :-1]
         angles_diff = get_rotation_matrices_distances(camera_estimated_poses[:, :, :-1], gt_rotations)
+        angles_diff = np.rad2deg(angles_diff)
         return angles_diff
 
     def get_angle_diff_between_given_rotations(self, rotation_1, rotation_2):
@@ -401,17 +397,6 @@ class BundleAdjustment(TrajectorySolver):
             plot_trajectories(camera_positions=self._final_estimated_trajectory, gt_camera_positions=gt_camera_positions,
                               points_3d=None, path=PATH_TO_SAVE_COMPARISON_TO_GT_BUNDLE_ADJUSTMENT + path_suffix, suffix="(BUNDLE ADJUSTMENT)")
 
-    def get_rotation_error(self):
-
-        pass
-        # pred_trajectory = self.__global_Rt_poses_in_numpy
-        # gt_trajectory = get_gt_trajectory()[self.key_frames]
-        # for kf in self.key_frames:
-        #     pred_pose = pred_trajectory[kf]
-        #     gt_pose = gt_trajectory[kf]
-        #     translation, rotation = get_translation_rotation_diff(pred_pose, gt_pose)
-        #     print(translation)
-
     def get_absolute_localization_error(self, path_suffix=""):
 
         try:
@@ -586,7 +571,6 @@ class LoopClosure(TrajectorySolver):
         self.force_recompute = force_recompute
         if self.force_recompute:
             print("Forcing recompute on loop closure even if file is found...")
-
 
     def solve_trajectory(self):
         # Implement Loop Closure algorithm here

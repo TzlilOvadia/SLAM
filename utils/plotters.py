@@ -67,7 +67,7 @@ def plot_absolute_angle_diff_composition(diff, key_frames, path="", mode=""):
     plt.figure()
     plt.plot(key_frames, diff, label='angle_diff')
     plt.xlabel("KeyFrame Index")
-    plt.ylabel("Angle Diff Along Eigenvector (Radians)")
+    plt.ylabel("Angle Diff Along Eigenvector (Degrees)")
     plt.legend()
     plt.title(f"{mode} Absolute Angle Estimation Error")
     if path:
@@ -370,10 +370,10 @@ def plot_multiple_trajectories(camera_positions_PNP,camera_positions_bundle_adju
 
     plt.xlabel("X")
     plt.ylabel("Z")
-    plt.title("Our Trajectory Vs Ground Truth Trajectory "+suffix)
+    plt.title("Various Stages Trajectory Vs Ground Truth Trajectory ")
     plt.legend()
     if path:
-        plt.savefig(f"plots/{path}")
+        plt.savefig(f"plots/{path}" + suffix)
     else:
         plt.show()
 
