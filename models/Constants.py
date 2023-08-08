@@ -38,9 +38,9 @@ OPTIMIZED_ESTIMATES_INDEX = 5
 MARGINALS_INDEX = 6
 MAHALANOBIS_THRESH = 500000
 
-PATH_TO_SAVE_TRACKER_FILE = "models/serialized_tracker_shlomi_ver1"
-PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "models/bundle_adjustment_results_time_elapsed_new_tracker_ver1"
-PATH_TO_SAVE_LOOP_CLOSURE_RESULTS = "models/loop_closure_results_time_elapsed_new_tracker_ver1"
+PATH_TO_SAVE_TRACKER_FILE = "models/serialized_tracker_file"
+PATH_TO_SAVE_BUNDLE_ADJUSTMENT_RESULTS = "models/bundle_adjustment_results_file"
+PATH_TO_SAVE_LOOP_CLOSURE_RESULTS = "models/loop_closure_results_file"
 
 PATH_TO_SAVE_COMPARISON_TO_GT_PNP = "plots/compare_PNP_to_ground_truth"
 PATH_TO_SAVE_COMPARISON_TO_GT_BUNDLE_ADJUSTMENT = "plots/compare_BUNDLE_ADJUSTMENT_to_ground_truth"
